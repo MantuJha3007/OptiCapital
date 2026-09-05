@@ -23,7 +23,13 @@ from app.services.control_engine import evaluate_controls
 from app.services.optimizer import optimize_portfolio, save_optimization_run
 from app.services.explanation_service import generate_explanation
 from app.services.rebalancer import determine_action, save_rebalance_action
-from app.core.formulas import transaction_cost as calc_txn_cost, portfolio_turnover
+from app.core.constants import ACTION_HOLD
+from app.core.formulas import (
+    transaction_cost as calc_txn_cost,
+    portfolio_turnover,
+    shock_severity,
+    stress_covariance,
+)
 from app.config import settings
 
 
@@ -80,6 +86,8 @@ def run_scenario(
     for shock in scenario.shocks:
         shock_map[str(shock.asset_id)] = shock.shock_percentage
 
+    asset_shocks = np.array([shock_map.get(aid, 0.0) for aid in asset_ids], dtype=float)
+
     shocked_values = np.zeros(len(assets))
     for i, aid in enumerate(asset_ids):
         shock_pct = shock_map.get(aid, 0.0)
@@ -94,9 +102,36 @@ def run_scenario(
     else:
         shocked_weights = weights.copy()
 
-    # --- 4. Post-shock risk ---
+    # --- 4. Reprice risk for the stressed regime ---
+    #
+    # A shock is a regime change, not just a repricing of weights. Measuring
+    # post-shock risk against the calm historical covariance understates it
+    # badly, and in fact inverts it: the asset that crashed now occupies a
+    # smaller share of the book, so a naive recomputation reports LOWER
+    # volatility after a market collapse. Volatilities are expanded and
+    # correlations converged toward 1 in proportion to how severe the
+    # scenario is, which is what actually happens in a dislocation.
+    prices = get_price_dataframe(db, [UUID(a) for a in asset_ids])
+    if not prices.empty:
+        mean_rets, base_cov = compute_annualized_stats(prices, asset_ids)
+    else:
+        mean_rets = exp_rets
+        base_cov = np.diag(vols ** 2)
+
+    severity = shock_severity(asset_shocks, portfolio_loss)
+    cov_matrix = stress_covariance(base_cov, severity)
+
+    # The shock's own loss is a realised drawdown that price history cannot see.
+    realised_drawdown = abs(min(portfolio_loss, 0.0))
+
     risk_after = calculate_risk(
-        db, portfolio, weights_override=shocked_weights
+        db,
+        portfolio,
+        weights_override=shocked_weights,
+        cov_matrix=cov_matrix,
+        mean_returns=mean_rets,
+        drawdown_override=realised_drawdown,
+        stress_override=severity,
     )
     save_risk_snapshot(db, portfolio.id, risk_after)
 
@@ -104,13 +139,8 @@ def run_scenario(
     control = evaluate_controls(risk_after)
 
     # --- 6. Optimizer ---
-    prices = get_price_dataframe(db, [UUID(a) for a in asset_ids])
-    if not prices.empty:
-        mean_rets, cov_matrix = compute_annualized_stats(prices, asset_ids)
-    else:
-        mean_rets = exp_rets
-        cov_matrix = np.diag(vols ** 2)
-
+    # Solved against the stressed covariance: the recommendation has to be
+    # safe in the regime the portfolio is actually in, not the calm one.
     opt_result = optimize_portfolio(
         mean_returns=mean_rets,
         cov_matrix=cov_matrix,
@@ -134,14 +164,34 @@ def run_scenario(
         old_weights=shocked_weights,
     )
 
-    # --- 8. Calculate post-optimization risk ---
+    # --- 8. Post-optimisation risk, measured in the same stressed regime ---
     risk_optimized = calculate_risk(
-        db, portfolio, weights_override=opt_result.weights
+        db,
+        portfolio,
+        weights_override=opt_result.weights,
+        cov_matrix=cov_matrix,
+        mean_returns=mean_rets,
+        drawdown_override=realised_drawdown,
+        stress_override=severity,
     )
 
-    # --- 9. Determine action and save ---
+    # --- 9. Determine action ---
+    #
+    # On HOLD the recommendation is the current book. The optimiser still ran
+    # and its result is preserved in optimization_runs for audit, but the
+    # recommendation recorded and surfaced has to match the verdict: telling
+    # someone no intervention is required and then handing them a trade list
+    # and a bill is the contradiction this system exists to avoid.
     action = determine_action(risk_after, control)
-    txn_cost_val = opt_result.txn_cost
+
+    if action == ACTION_HOLD:
+        recommended_weights = shocked_weights
+        txn_cost_val = 0.0
+        risk_after_action = risk_after.risk_score
+    else:
+        recommended_weights = opt_result.weights
+        txn_cost_val = opt_result.txn_cost
+        risk_after_action = risk_optimized.risk_score
 
     rebalance = save_rebalance_action(
         db=db,
@@ -150,25 +200,35 @@ def run_scenario(
         action=action,
         transaction_cost=txn_cost_val,
         risk_before=risk_after.risk_score,
-        risk_after=risk_optimized.risk_score,
+        risk_after=risk_after_action,
         reason=generate_explanation(
             risk_before=risk_before,
             risk_after=risk_after,
             control=control,
             assets=assets,
             old_weights=shocked_weights,
-            new_weights=opt_result.weights,
+            new_weights=recommended_weights,
         ),
     )
 
     # --- 10. Build response ---
     allocation_dict = {}
     for i, s in enumerate(symbols):
-        allocation_dict[s.lower()] = round(float(opt_result.weights[i]), 4)
+        allocation_dict[s.lower()] = round(float(recommended_weights[i]), 4)
 
     shock_details = {}
     for shock in scenario.shocks:
         shock_details[shock.asset.symbol.lower()] = shock.shock_percentage
+
+    # The post-shock weights are the baseline the recommendation is measured
+    # against: turnover, cost and the explanation are all relative to the book
+    # as it stands AFTER the shock, not before it. Returning them explicitly
+    # stops the client having to re-derive the renormalisation, and stops the
+    # allocation table and the explanation quoting different "current" weights.
+    weights_after_shock = {
+        sym.lower(): round(float(shocked_weights[i]), 4)
+        for i, sym in enumerate(symbols)
+    }
 
     response = {
         "scenario": {
@@ -188,6 +248,7 @@ def run_scenario(
             "details": shock_details,
             "portfolio_loss": round(portfolio_loss, 4),
             "portfolio_value_after": round(total_after_shock, 2),
+            "weights_after": weights_after_shock,
         },
         "after_shock": {
             "risk_score": round(risk_after.risk_score, 1),
@@ -207,10 +268,10 @@ def run_scenario(
             "allocation": allocation_dict,
             "transaction_cost": round(txn_cost_val, 2),
             "turnover": round(
-                portfolio_turnover(shocked_weights, opt_result.weights), 4
+                portfolio_turnover(shocked_weights, recommended_weights), 4
             ),
             "risk_before": round(risk_after.risk_score, 1),
-            "risk_after": round(risk_optimized.risk_score, 1),
+            "risk_after": round(risk_after_action, 1),
             "explanation": rebalance.reason or "",
         },
     }

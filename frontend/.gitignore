@@ -1,24 +1,51 @@
-# Logs
-logs
+# ==============================================================================
+# OptiCapital Frontend (.gitignore)
+# React + Vite + TypeScript + Tailwind
+# ==============================================================================
+
+# Logs & Debugging
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+vite.log
 
-node_modules
-dist
-dist-ssr
+# Node dependencies
+node_modules/
+
+# Production builds
+dist/
+dist-ssr/
+build/
+
+# Vite, TypeScript & Caching
+.vite/
+.eslintcache
+*.tsbuildinfo
+.cache/
+
+# Environment files & Secrets
+.env
+.env.*
+*.env
+!.env.example
 *.local
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
+# IDE & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?
+
+# OS metadata
+.DS_Store
+Thumbs.db
+[Dd]esktop.ini

@@ -2,6 +2,8 @@
 
 import uuid
 from datetime import datetime
+
+from app.core.time import utcnow
 from decimal import Decimal
 
 from sqlalchemy import ForeignKey, String, Boolean, Numeric, Float, Text, DateTime
@@ -36,7 +38,7 @@ class RebalanceAction(Base):
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
+        DateTime, default=utcnow
     )
 
     # Relationships

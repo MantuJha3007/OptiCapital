@@ -3,6 +3,8 @@
 import uuid
 from datetime import datetime
 
+from app.core.time import utcnow
+
 from sqlalchemy import String, Float, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,7 +29,7 @@ class Asset(Base):
     max_weight: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
+        DateTime, default=utcnow
     )
 
     # Relationships

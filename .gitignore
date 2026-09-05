@@ -1,43 +1,153 @@
-# Python
+# ==============================================================================
+# OptiCapital - Root .gitignore
+# Comprehensive ignore rules for Full-Stack (FastAPI + React/Vite + PostgreSQL)
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Environment Variables & Secrets
+# ------------------------------------------------------------------------------
+.env
+.env.*
+*.env
+!.env.example
+!frontend/.env.example
+!backend/.env.example
+secrets/
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+id_rsa*
+id_ed25519*
+
+# ------------------------------------------------------------------------------
+# Logs & Process Output
+# ------------------------------------------------------------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+uvicorn.log
+gunicorn.log
+celery.log
+fastapi.log
+docker-compose*.log
+
+# ------------------------------------------------------------------------------
+# Python & Bytecode
+# ------------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyo
+*.pyd
+.Python
 *.egg-info/
 dist/
 build/
 .eggs/
 *.egg
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
 
-# Virtual environments
+# ------------------------------------------------------------------------------
+# Python Virtual Environments
+# ------------------------------------------------------------------------------
 venv/
 .venv/
 env/
+ENV/
+env.bak/
+venv.bak/
+backend/venv/
+backend/.venv/
+backend/env/
 
-# Environment
-.env
+# ------------------------------------------------------------------------------
+# Testing & Code Coverage
+# ------------------------------------------------------------------------------
+.pytest_cache/
+backend/.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+nosetests.xml
+coverage.xml
 
-# IDE
-.vscode/
+# ------------------------------------------------------------------------------
+# Local Databases & Persistent State
+# ------------------------------------------------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+postgres_data/
+backend/opticapital.db
+data/
+dumps/
+
+# ------------------------------------------------------------------------------
+# Node & Frontend (React / Vite / TypeScript)
+# ------------------------------------------------------------------------------
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+.eslintcache
+*.tsbuildinfo
+.parcel-cache/
+.cache/
+
+# ------------------------------------------------------------------------------
+# Operating System & Filesystem
+# ------------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# ------------------------------------------------------------------------------
+# IDEs, Editors & Workspaces
+# ------------------------------------------------------------------------------
 .idea/
+.vscode/
 *.swp
 *.swo
+*~
+*.sublime-project
+*.sublime-workspace
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
 
-# Node
-node_modules/
-frontend/dist/
-frontend/.env
-
-# Docker
-postgres_data/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Testing
-.pytest_cache/
-htmlcov/
-.coverage
-
-# Alembic
-*.pyc
+# ------------------------------------------------------------------------------
+# Temporary Files & Archives
+# ------------------------------------------------------------------------------
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig

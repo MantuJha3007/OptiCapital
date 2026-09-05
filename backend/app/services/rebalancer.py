@@ -5,6 +5,8 @@ from uuid import UUID
 from decimal import Decimal
 from datetime import datetime
 
+from app.core.time import utcnow
+
 from sqlalchemy.orm import Session
 
 from app.models.rebalance import RebalanceAction
@@ -116,14 +118,14 @@ def approve_rebalance(
         if holding:
             holding.weight = alloc.new_weight
             holding.market_value = Decimal(str(round(alloc.new_weight * portfolio_value, 2)))
-            holding.updated_at = datetime.utcnow()
+            holding.updated_at = utcnow()
 
     # Mark rebalance as approved
     if ra:
         ra.approved = True
 
     # Update portfolio timestamp
-    portfolio.updated_at = datetime.utcnow()
+    portfolio.updated_at = utcnow()
 
     db.commit()
 

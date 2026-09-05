@@ -135,3 +135,70 @@ def annualize_returns(daily_returns: np.ndarray) -> np.ndarray:
 def annualize_covariance(daily_cov: np.ndarray) -> np.ndarray:
     """Annualise daily covariance matrix."""
     return daily_cov * TRADING_DAYS_PER_YEAR
+
+
+def shock_severity(
+    asset_shocks: np.ndarray,
+    portfolio_loss: float,
+) -> float:
+    """Severity of a scenario, in [0, 1].
+
+    A stress scenario is characterised both by how hard the worst asset is hit
+    and by what the book actually lost. A -35% shock to a small sleeve is a
+    different event from a -35% shock to the whole portfolio, so both terms
+    contribute.
+
+    Calibration: a -35% worst-asset shock or a -25% portfolio loss each
+    represent a full-severity event.
+    """
+    worst_asset = abs(min(float(np.min(asset_shocks)), 0.0))
+    realised_loss = abs(min(portfolio_loss, 0.0))
+
+    severity = 0.6 * (worst_asset / 0.35) + 0.4 * (realised_loss / 0.25)
+    return float(min(max(severity, 0.0), 1.0))
+
+
+def stress_covariance(
+    cov_matrix: np.ndarray,
+    severity: float,
+    vol_uplift: float = 2.0,
+    correlation_convergence: float = 0.80,
+) -> np.ndarray:
+    """Reprice a covariance matrix for a stressed market regime.
+
+    A scenario shock repriced only the weights, which is not what a market
+    crash does to risk. Two things happen in a real dislocation, and both
+    raise portfolio risk:
+
+    1. Volatility expands. A 2-3x expansion is typical.
+    2. Correlations converge toward 1. Diversification fails exactly when it
+       is needed, which is why a shock can raise portfolio risk even as the
+       weight of the falling asset shrinks.
+
+    Without this, a crash *lowers* the measured risk score: the asset that
+    crashed now occupies a smaller share of the book, so naive recomputation
+    reports a calmer portfolio after a market collapse.
+
+    The correlation step is a convex combination of the sample correlation
+    matrix with the all-ones matrix, so the result stays positive
+    semi-definite and remains a valid covariance matrix for the optimiser.
+    """
+    if severity <= 0:
+        return cov_matrix
+
+    variances = np.diag(cov_matrix).copy()
+    vols = np.sqrt(np.maximum(variances, 1e-18))
+
+    # Recover the correlation matrix
+    outer = np.outer(vols, vols)
+    corr = np.divide(cov_matrix, outer, out=np.zeros_like(cov_matrix), where=outer > 0)
+
+    # Converge correlations toward 1: C' = (1 - lam) * C + lam * J
+    lam = correlation_convergence * severity
+    stressed_corr = (1.0 - lam) * corr + lam * np.ones_like(corr)
+    np.fill_diagonal(stressed_corr, 1.0)
+
+    # Expand volatilities
+    stressed_vols = vols * (1.0 + vol_uplift * severity)
+
+    return stressed_corr * np.outer(stressed_vols, stressed_vols)

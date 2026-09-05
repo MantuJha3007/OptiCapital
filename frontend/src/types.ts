@@ -1,4 +1,9 @@
-/* API types matching backend Pydantic schemas */
+/* API types matching backend Pydantic schemas.
+
+   Verified against:
+     backend/app/api/portfolio.py, risk.py, scenarios.py,
+     optimization.py, rebalance.py
+     backend/app/services/scenario_engine.py::run_scenario  */
 
 export interface Asset {
   id: string;
@@ -59,32 +64,30 @@ export interface Scenario {
   shocks: ScenarioShock[];
 }
 
+export interface ScenarioStateSnapshot {
+  risk_score: number;
+  risk_level: string;
+  volatility: number;
+  drawdown: number;
+  liquidity: number;
+}
+
 export interface ScenarioRunResponse {
   scenario: {
     id: string;
     name: string;
     description: string | null;
   };
-  before: {
-    portfolio_value: number;
-    risk_score: number;
-    risk_level: string;
-    volatility: number;
-    drawdown: number;
-    liquidity: number;
-  };
+  before: ScenarioStateSnapshot & { portfolio_value: number };
   shock: {
     details: Record<string, number>;
     portfolio_loss: number;
     portfolio_value_after: number;
+    /** Renormalised weights after the shock — the baseline the
+        recommendation, its turnover and its cost are all measured against. */
+    weights_after?: Record<string, number>;
   };
-  after_shock: {
-    risk_score: number;
-    risk_level: string;
-    volatility: number;
-    drawdown: number;
-    liquidity: number;
-  };
+  after_shock: ScenarioStateSnapshot;
   control: {
     mode: string;
     breaches: string[];
@@ -100,4 +103,56 @@ export interface ScenarioRunResponse {
     risk_after: number;
     explanation: string;
   };
+}
+
+/* GET /api/rebalance/history */
+export interface RebalanceRecord {
+  id: string;
+  action: string;
+  approved: boolean;
+  transaction_cost: number | null;
+  risk_before: number | null;
+  risk_after: number | null;
+  reason: string | null;
+  created_at: string;
+}
+
+/* GET /api/optimization */
+export interface OptimizationRecord {
+  id: string;
+  risk_level: string;
+  status: string;
+  expected_return_before: number | null;
+  volatility_before: number | null;
+  expected_return_after: number | null;
+  volatility_after: number | null;
+  transaction_cost: number | null;
+  created_at: string;
+}
+
+/* POST /api/optimize */
+export interface AllocationItem {
+  symbol: string;
+  name: string;
+  old_weight: number;
+  new_weight: number;
+}
+
+export interface OptimizationResult {
+  optimization_id: string;
+  status: string;
+  risk_level: string;
+  expected_return_before: number;
+  volatility_before: number;
+  expected_return_after: number;
+  volatility_after: number;
+  transaction_cost: number;
+  allocations: AllocationItem[];
+  explanation: string;
+}
+
+export interface RebalanceOutcome {
+  status?: string;
+  message?: string;
+  [key: string]: unknown;
 }

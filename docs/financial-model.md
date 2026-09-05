@@ -1,141 +1,177 @@
-# AEGIS Financial & Mathematical Model
+# Financial Model
 
-**Product Identity:** AEGIS (Adaptive Capital Resilience & Risk-Control System)  
-**Document Status:** Canonical Mathematical Specification  
+## Optimisation objective
 
----
+```
+maximize   wᵀμ  −  λ(wᵀΣw)  −  (c + γ)·‖w − w₀‖₁
+subject to sum(w) = 1
+           w ≥ 0
+           per-asset min/max weight
+           equity ≤ max_equity          (regime dependent)
+           cash   ≥ min_cash            (regime dependent)
+           wᵀΣw  ≤ max_volatility² + s  (regime dependent, s ≥ 0 penalised)
+```
 
-## 1. Portfolio Return & Risk Metrics
+| Symbol | Meaning | Default |
+|---|---|---|
+| `μ` | annualised expected returns | from market data |
+| `Σ` | annualised covariance | from market data, stressed under scenarios |
+| `λ` | risk aversion | `RISK_AVERSION` = 1.0 |
+| `c` | transaction cost rate | `TRANSACTION_COST_RATE` = 0.001 |
+| `γ` | intervention penalty | `INTERVENTION_PENALTY` = 0.15 |
+| `s` | volatility slack | penalised at 50.0 |
 
-Let $w \in \mathbb{R}^N$ be the portfolio allocation weight vector satisfying:
-$$\sum_{i=1}^N w_i = 1.0, \quad w_i \ge 0 \quad \forall i$$
+**Every term is a fraction of portfolio value.** This matters. Transaction
+cost was previously computed in currency (`turnover × value × rate`, roughly
+8,500) and subtracted from an expected return expressed as a fraction
+(roughly 0.07), making the cost term about five orders of magnitude larger
+than everything else. The solver was effectively blind to both expected
+return and `λ`.
 
-### 1.1 Expected Return
-$$E[R_p] = w^T \mu = \sum_{i=1}^N w_i \mu_i$$
-where $\mu \in \mathbb{R}^N$ is the vector of annualized asset expected returns.
+### Why γ exists
 
-### 1.2 Portfolio Volatility
-$$\sigma_p = \sqrt{w^T \Sigma w}$$
-where $\Sigma \in \mathbb{R}^{N \times N}$ is the annualized return covariance matrix computed from historical daily log returns $r_t = \ln(P_t / P_{t-1})$:
-$$\Sigma = 252 \times \text{Cov}(r)$$
+Real transaction cost is about 0.1% of turnover — far too small to deter
+churn on its own. Minimum necessary intervention therefore has to be stated
+explicitly rather than hoped for. `γ` is deliberately set **above** the risk
+reduction available from fully de-risking (the variance of a stressed book is
+around 0.06). Below that threshold the objective keeps trading past the point
+where the portfolio is already inside its limits; above it, the hard
+constraints decide how far to go and the solver stops exactly there.
 
-### 1.3 Maximum Drawdown (MDD)
-Given cumulative wealth trajectory $W_t = W_0 \prod_{s=1}^t (1 + R_s)$:
-$$\text{Peak}_t = \max_{0 \le s \le t} W_s$$
-$$\text{Drawdown}_t = \frac{\text{Peak}_t - W_t}{\text{Peak}_t}$$
-$$\text{MDD} = \max_{0 \le t \le T} \text{Drawdown}_t$$
+That is what makes the output the *smallest trade that restores safety*
+rather than the lowest-risk book obtainable.
 
-### 1.4 Liquidity Ratio
-$$L = \sum_{i=1}^N w_i \ell_i$$
-where $\ell_i \in [0.0, 1.0]$ represents the normalized liquidity factor of asset $i$.
+### Why the volatility limit has slack
 
-### 1.5 Concentration Index (HHI)
-$$\text{HHI} = \sum_{i=1}^N w_i^2$$
-- Equal-weight 5-asset portfolio: $\text{HHI} = 5 \times (0.20)^2 = 0.20$.
-- Single-asset monopoly: $\text{HHI} = 1.00$.
-
-### 1.6 Market Stress Indicator ($S$)
-$$S = \min\left(\max\left(\frac{\sigma_p}{\sigma_{\text{historical\_avg}}} - 1.0, 0.0\right), 1.0\right)$$
-
----
-
-## 2. Composite Risk Score (0–100)
-
-The composite risk score synthesizes individual normalized risk dimensions:
-
-$$\text{Risk Score} = 0.30 \cdot S_{\text{vol}} + 0.25 \cdot S_{\text{dd}} + 0.20 \cdot S_{\text{conc}} + 0.15 \cdot S_{\text{liq}} + 0.10 \cdot S_{\text{stress}}$$
-
-### Component Normalization Functions:
-1. **Volatility Score:**
-   $$S_{\text{vol}} = \min\left(\frac{\sigma_p}{0.30}, 1.0\right) \times 100$$
-2. **Drawdown Score:**
-   $$S_{\text{dd}} = \min\left(\frac{\text{MDD}}{0.20}, 1.0\right) \times 100$$
-3. **Concentration Score:**
-   $$S_{\text{conc}} = \max\left(\frac{\text{HHI} - 0.20}{0.80}, 0.0\right) \times 100$$
-4. **Liquidity Score (Inverse):**
-   $$S_{\text{liq}} = (1.0 - L) \times 100$$
-5. **Market Stress Score:**
-   $$S_{\text{stress}} = S \times 100$$
+In a severe enough regime the limit can be unreachable within the other
+bounds. A bare hard constraint would make the problem infeasible, the solver
+would return nothing, and the caller would fall back to the unchanged book —
+the one moment a risk system must not go quiet. The penalised slack means the
+solver always returns the best attainable allocation and reports how much
+risk it could not remove.
 
 ---
 
-## 3. Safe Operating Envelope (SOE) & Dynamic Bounds
+## Risk score (0–100)
 
-| Parameter | GREEN (Safe) | YELLOW (Caution) | ORANGE (Warning) | RED (Crisis) |
-| :--- | :--- | :--- | :--- | :--- |
-| **Score Range** | $0 \le \text{Score} < 30$ | $30 \le \text{Score} < 60$ | $60 \le \text{Score} < 80$ | $80 \le \text{Score} \le 100$ |
-| **Max Equity ($w_{\text{equity}}$)** | $\le 50\%$ | $\le 45\%$ | $\le 35\%$ | $\le 20\%$ |
-| **Min Cash ($w_{\text{cash}}$)** | $\ge 5\%$ | $\ge 10\%$ | $\ge 15\%$ | $\ge 20\%$ |
-| **Max Volatility ($\sigma_p$)** | $\le 15\%$ | $\le 14\%$ | $\le 12\%$ | $\le 10\%$ |
-| **Max Drawdown Limit** | $\le 10\%$ | $\le 10\%$ | $\le 8\%$ | $\le 5\%$ |
-| **Operational Stance** | `HOLD` | `ADVISORY` | `REBALANCE` | `CRISIS_PROTECTION` |
+| Component | Weight | Normalisation |
+|-----------|--------|---------------|
+| Volatility | 30% | 0% → 0, 30%+ → 100 |
+| Max drawdown | 25% | 0% → 0, 20%+ → 100 |
+| Concentration (HHI) | 20% | 0.20 → 0, 1.00 → 100 |
+| Illiquidity | 15% | ratio 1.00 → 0, 0.00 → 100 |
+| Market stress | 10% | 0 → 0, 1 → 100 |
 
-### Anti-Chattering Hysteresis
-To prevent boundary oscillation when risk scores hover around $30.0$, $60.0$, or $80.0$, de-escalation requires:
-$$\text{Score}_{\text{recovery}} \le \text{Threshold} - \delta \quad (\delta = 3.0)$$
-- YELLOW $\to$ GREEN recovery: $\text{Score} \le 27.0$.
-- ORANGE $\to$ YELLOW recovery: $\text{Score} \le 57.0$.
-- RED $\to$ ORANGE recovery: $\text{Score} \le 77.0$.
+Bands: **SAFE** 0–30 · **WARNING** 30–60 · **STRESS** 60–80 · **CRISIS** 80–100
 
 ---
 
-## 4. Minimum-Intervention Optimization Formulation
+## Stress repricing — how a scenario changes risk
 
-Rather than re-optimizing the entire portfolio toward an unconstrained point, AEGIS solves:
+A scenario shock does **not** only reprice weights. Modelling it that way
+inverts the result: after a crash the asset that fell occupies a smaller
+share of the book, so naive recomputation against the calm historical
+covariance reports *lower* portfolio volatility after a market collapse. The
+control engine could then never escalate.
 
-$$\min_{w \in \mathbb{R}^N} \quad \frac{1}{2} \|w - w_0\|_2^2 + \gamma \sum_{i=1}^N |w_i - w_{0,i}| + \lambda w^T \Sigma w - \kappa w^T \mu$$
+A shock is a regime change, so two things are repriced in proportion to
+severity:
 
-Subject to:
-$$\begin{aligned}
-\sum_{i=1}^N w_i &= 1.0 \\
-w_i &\ge 0 \quad \forall i \\
-w_{\text{equity}} &\le \text{MaxEquity}_{\text{mode}} \\
-w_{\text{cash}} &\ge \text{MinCash}_{\text{mode}} \\
-w_i &\le w_i^{\max}, \quad w_i \ge w_i^{\min} \\
-w^T \Sigma w &\le \sigma_{\max,\text{mode}}^2
-\end{aligned}$$
+**1. Volatility expands.**
 
-Where:
-- $w_0$: Current portfolio weight vector.
-- $\frac{1}{2} \|w - w_0\|_2^2$: Minimum Euclidean intervention penalty.
-- $\gamma \sum |w_i - w_{0,i}|$: $L_1$ portfolio turnover penalty.
-- $\lambda$: Risk aversion multiplier on portfolio variance.
-- $\kappa$: Return incentive weight.
+```
+σ'ᵢ = σᵢ · (1 + 2.0 · severity)
+```
 
----
+**2. Correlations converge toward 1.**
 
-## 5. Transaction Cost & Turnover Friction
+```
+C' = (1 − λ_c)·C + λ_c·J        λ_c = 0.80 · severity
+```
 
-$$\text{Turnover} = \sum_{i=1}^N |w_i^* - w_{0,i}|$$
-$$C_{\text{txn}} = \text{Turnover} \times V_{\text{portfolio}} \times r_{\text{cost}}$$
-Where $r_{\text{cost}} = 0.0010$ (10 basis points).
+`J` is the all-ones matrix, so `C'` is a convex combination of two positive
+semi-definite matrices and stays a valid covariance — which the optimiser
+requires. This is diversification failing exactly when it is needed, and it
+is why a shock can raise portfolio risk even as the falling asset's weight
+shrinks.
 
----
+**Severity** is drawn from the scenario itself:
 
-## 6. Risk Attribution via Euler's Decomposition
+```
+severity = clamp( 0.6·(worst_asset_shock / 0.35) + 0.4·(portfolio_loss / 0.25), 0, 1 )
+```
 
-The marginal risk contribution of asset $i$ to portfolio volatility $\sigma_p$ is:
-$$\text{MCR}_i = \frac{\partial \sigma_p}{\partial w_i} = \frac{(\Sigma w)_i}{\sigma_p}$$
+Both terms matter: a −35% shock to a small sleeve is a different event from a
+−35% shock to the whole book.
 
-Absolute Risk Contribution (ARC):
-$$\text{ARC}_i = w_i \cdot \text{MCR}_i = \frac{w_i (\Sigma w)_i}{\sigma_p}$$
-Euler's Theorem guarantees: $\sum_{i=1}^N \text{ARC}_i = \sigma_p$.
-
-Percentage Risk Contribution (PRC):
-$$\text{PRC}_i = \frac{\text{ARC}_i}{\sigma_p} = \frac{w_i (\Sigma w)_i}{\sigma_p^2}$$
-Identifies hidden concentration where an asset's risk contribution vastly exceeds its capital allocation.
+**Drawdown and market stress** are also overridden. The shock's realised loss
+is itself a peak-to-trough decline, and recomputing drawdown from unshocked
+price history would silently discard it.
 
 ---
 
-## 7. Reverse Stress Testing & Distance to Failure
+## Dynamic constraints
 
-Given a crisis shock vector $\mathbf{s} \in \mathbb{R}^N$ and shock multiplier $\alpha \ge 0$:
-$$V_i(\alpha) = w_i^0 \cdot V_{\text{portfolio}} \cdot (1 + \alpha \cdot s_i)$$
-$$V_{\text{total}}(\alpha) = \sum_{i=1}^N V_i(\alpha)$$
-$$w_i(\alpha) = \frac{V_i(\alpha)}{V_{\text{total}}(\alpha)}$$
+| Parameter | SAFE | WARNING | STRESS | CRISIS |
+|-----------|------|---------|--------|--------|
+| Max equity | 50% | 45% | 35% | 20% |
+| Min cash | 10% | 12% | 15% | 20% |
+| Max volatility | 15% | 14% | 12% | 10% |
+| Max drawdown | 10% | 10% | 8% | 5% |
 
-The failure boundary is the critical multiplier $\alpha^*$ satisfying:
-$$\alpha^* = \inf \left\{ \alpha \in [0, 0.50] \mid \text{RiskScore}(w(\alpha)) \ge 80.0 \right\}$$
+### Breach triggers vs optimiser bounds
 
-- **Distance to Failure (DtF):** $\text{DtF} = \alpha^*$
-- **Resilience Score:** $\text{Resilience} = \min\left(\frac{\text{DtF}}{0.30}, 1.0\right) \times 100$
+These are different things and the distinction is deliberate:
+
+- **Breach triggers** — volatility, drawdown, liquidity, concentration and
+  market stress, tested against the SAFE thresholds. A breach is what causes
+  an intervention.
+- **Optimiser bounds** — `max_equity` and `min_cash`. These shape the
+  solution when a reallocation is solved. An allocation sitting outside one
+  does not by itself trigger an intervention.
+
+---
+
+## Transaction cost
+
+```
+cost = Σ|w_new − w_old| × portfolio_value × 0.001
+```
+
+Measured against the **post-shock** book, since that is the position the
+recommendation actually trades from. The API returns those weights as
+`shock.weights_after` so the client never has to re-derive them.
+
+---
+
+## Demo portfolio
+
+| Asset | Weight |
+|---|---|
+| Equity | 37% |
+| Government Bonds | 27% |
+| Corporate Bonds | 15% |
+| Gold | 10% |
+| Cash | 11% |
+
+HHI 0.254, drawdown 8.4%, risk score 22.8 — **SAFE, with no breaches.**
+
+The book has to start comfortably inside its own envelope, because the
+product's central claim is that the correct action is usually no action. An
+earlier 45/25/15/10/5 split sat exactly on two SAFE limits (HHI 0.300 against
+a 0.300 ceiling, 5% cash against a 10% floor), so the engine reported
+breaches at rest and even a benign scenario produced a rebalance.
+
+## Scenario outcomes
+
+| Scenario | Loss | Risk score | Regime | Breaches | Action | Turnover |
+|---|---|---|---|---|---|---|
+| Normal Market | +1.3% | 22.8 → 23.0 | SAFE | 0 | **HOLD** | 0.0% |
+| Inflation Shock | −7.4% | 22.8 → 38.3 | WARNING | 2 | REBALANCE | 23.7% |
+| Market Crash | −16.2% | 22.8 → 62.3 | STRESS | 3 | REBALANCE | 72.0% |
+| Systemic Crisis | −24.0% | 22.8 → 67.3 | STRESS | 3 | REBALANCE | 73.0% |
+
+Turnover under the severe scenarios is large because it is the *minimum*
+required: taking a book from 30% volatility to a 12% STRESS limit, when
+correlations have converged, cannot be done with a small trade. The system
+states the size of that trade and its cost rather than hiding it.

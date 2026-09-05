@@ -1,235 +1,188 @@
-# AEGIS: Adaptive Capital Resilience & Risk-Control System
+# OptiCapital — Smart Capital Guard
 
-> **A closed-loop financial risk-control and supervisory decision-support system engineered for capital preservation under macroeconomic and liquidity stress.**
+**Adaptive capital management, risk control and dynamic rebalancing.**
 
-⚠️ **OPERATIONAL BOUNDARY:** *This system is an institutional simulation and supervisory decision-support platform. It does NOT connect to live brokerage execution gateways or execute real monetary transactions.*
+> Market data → Portfolio → Risk engine → Control engine → CVXPY optimiser →
+> Transaction cost → Recommendation → Audited decision → Dashboard
 
----
+The system does not continuously chase an optimal portfolio. It maintains a
+**safe operating envelope**, and when the book leaves it, applies the
+**minimum intervention** that restores safety.
 
-## 1. Executive Summary
-
-Traditional portfolio management treats optimization as an open-loop mathematical calculation—continually chasing theoretical "optimal" weights, triggering excessive turnover, incurring heavy transaction drag, and failing when crisis correlations converge to 1.0.
-
-**AEGIS reframes capital allocation as a closed-loop control system:**
-1. **Observe & Measure:** Continuously tracks portfolio valuation, volatility, maximum drawdown, concentration (HHI), and liquidity.
-2. **Safe Operating Envelope (SOE):** Evaluates risk scores against dynamically parameterized zones (**GREEN**, **YELLOW**, **ORANGE**, **RED**) with anti-chattering hysteresis.
-3. **Diagnose (Risk Attribution):** Pinpoints the precise asset-level drivers of risk ($MCAR_i$) when stress emerges.
-4. **Minimum Necessary Intervention:** Formulates the smallest feasible portfolio adjustment using CVXPY quadratic programming that restores compliance while penalizing portfolio turnover and transaction costs.
-5. **Independent Certification:** Validates candidate allocations through a decoupled verification layer before human review.
-6. **Reverse Stress Testing (The WOW Feature):** Calculates the portfolio's exact **Distance to Failure (DtF)** by searching backward to find the minimum market shock that breaches survival boundaries.
-7. **Institutional Audit:** Persists 100% of assessments, breaches, optimizer inputs, candidate weights, and human approvals in PostgreSQL.
+⚠️ **Simulation and decision support. It does not execute real trades.**
 
 ---
 
-## 2. Architecture Overview
+## Quick start
 
-```text
-                         AEGIS
-          Adaptive Capital Resilience
-             & Risk-Control System
-                         │
-                         ▼
-                  Portfolio State
-                         │
-                         ▼
-                   Risk Engine
-                         │
-              ┌──────────┴──────────┐
-              ▼                     ▼
-       Risk Attribution       Scenario Engine
-                                    │
-                                    ▼
-                            Stress Testing
-                                    │
-              ┌─────────────────────┘
-              ▼
-                Safe Operating Envelope
-                  GREEN / YELLOW /
-                  ORANGE / RED
-                         │
-                         ▼
-                   Control Engine
-                         │
-                         ▼
-              Minimum-Intervention
-                  CVXPY Optimizer
-                         │
-                         ▼
-                 Transaction Cost
-                         │
-                         ▼
-                Independent Validator
-                         │
-                         ▼
-                   Human Approval
-                         │
-                         ▼
-                Simulated Rebalance
-                         │
-                         ▼
-                  Risk Recalculation
-                         │
-                         ▼
-                   Stress Re-test
-                         │
-                         ▼
-                Reverse Stress Test
-                         │
-                         ▼
-                  Failure Boundary
-                         │
-                         ▼
-                 PostgreSQL Audit
-                         │
-                         ▼
-              Dashboard + Explanation
-```
+Two ways to run it. Both give the identical schema, engine and audit trail.
 
----
+### Option A — SQLite, no infrastructure (fastest)
 
-## 3. Technology Stack
-
-| Layer | Technologies | Role |
-| :--- | :--- | :--- |
-| **Frontend** | React 18, TypeScript, Vite, Tailwind CSS v4, Recharts, Lucide-React | Real-time risk dashboard, stress lab, and decision UI |
-| **Backend** | Python 3.11+, FastAPI, Uvicorn, Pydantic v2 | REST API gateway, service orchestration, async lifespan |
-| **Math & Optimization** | NumPy, SciPy, Pandas, CVXPY (CLARABEL / OSQP / SCS) | Convex quadratic programming, matrix math, risk formulas |
-| **Persistence & Audit** | PostgreSQL 16, SQLAlchemy 2.0, Alembic | 11 relational tables, immutable snapshots, audit ledgers |
-| **Infrastructure** | Docker, Docker Compose | Multi-container isolated local deployment |
-
----
-
-## 4. Documentation Index
-
-The repository features comprehensive, production-grade technical documentation in [`docs/`](file:///c:/Users/HEMANT%20GUPTA/Documents/vibe/OptiCapital/docs):
-
-- 📘 **[AEGIS_FINAL_PRODUCT_SPECIFICATION.md](file:///c:/Users/HEMANT%20GUPTA/Documents/vibe/OptiCapital/docs/AEGIS_FINAL_PRODUCT_SPECIFICATION.md)** — Canonical master specification covering all 34 functional and mathematical areas.
-- 🏗️ **[AEGIS_TECHNICAL_ARCHITECTURE.md](file:///c:/Users/HEMANT%20GUPTA/Documents/vibe/OptiCapital/docs/AEGIS_TECHNICAL_ARCHITECTURE.md)** — Deep technical blueprint detailing frontend, backend, optimizer, and database topology.
-- 🗺️ **[AEGIS_MODULE_MAP.md](file:///c:/Users/HEMANT%20GUPTA/Documents/vibe/OptiCapital/docs/AEGIS_MODULE_MAP.md)** — Concrete mapping of every system capability to actual repository files.
-- 🛣️ **[AEGIS_IMPLEMENTATION_ROADMAP.md](file:///c:/Users/HEMANT%20GUPTA/Documents/vibe/OptiCapital/docs/AEGIS_IMPLEMENTATION_ROADMAP.md)** — Phased milestone plan prioritizing the core working loop over optional extensions.
-- 📊 **[AEGIS_IMPLEMENTATION_STATUS.md](file:///c:/Users/HEMANT%20GUPTA/Documents/vibe/OptiCapital/docs/AEGIS_IMPLEMENTATION_STATUS.md)** — Honest, reality-checked status tracker of what is operational vs planned.
-- ⚖️ **[AEGIS_ARCHITECTURE_DECISIONS.md](file:///c:/Users/HEMANT%20GUPTA/Documents/vibe/OptiCapital/docs/AEGIS_ARCHITECTURE_DECISIONS.md)** — Formal Architecture Decision Records (ADRs 1–10).
-- 🎬 **[AEGIS_DEMO_FLOW.md](file:///c:/Users/HEMANT%20GUPTA/Documents/vibe/OptiCapital/docs/AEGIS_DEMO_FLOW.md)** — Minute-by-minute 23-step script and judge Q&A defense.
-- 🔌 **[docs/api.md](file:///c:/Users/HEMANT%20GUPTA/Documents/vibe/OptiCapital/docs/api.md)** — REST API contracts, schemas, and payload examples.
-- 💾 **[docs/database.md](file:///c:/Users/HEMANT%20GUPTA/Documents/vibe/OptiCapital/docs/database.md)** — PostgreSQL 11-table schema, index strategy, and audit principles.
-- 📐 **[docs/financial-model.md](file:///c:/Users/HEMANT%20GUPTA/Documents/vibe/OptiCapital/docs/financial-model.md)** — Mathematical formulations, Euler risk decomposition, and solver equations.
-
----
-
-## 5. Quick Start & Local Setup
-
-### Prerequisites
-- Docker & Docker Compose
-- Python 3.11+ (for local backend development)
-- Node.js 18+ and npm (for local frontend development)
-
----
-
-### Method A: Full Docker Compose (Recommended)
-
-```bash
-# 1. Clone repository and navigate to root
-cd OptiCapital
-
-# 2. Launch multi-container stack (PostgreSQL, Backend, Frontend)
-docker compose up -d
-
-# 3. Seed database with demo portfolio, assets, and market data
-docker compose exec backend python -m app.seed.seed_database
-```
-
-- **Frontend Application:** `http://localhost:5173`
-- **Backend API & Swagger Docs:** `http://localhost:8000/docs`
-- **PostgreSQL Database:** `localhost:5432` (`opti_capital`)
-
----
-
-### Method B: Native Local Development
-
-#### Step 1: Start PostgreSQL
-```bash
-docker compose up -d postgres
-```
-
-#### Step 2: Setup & Run Backend
 ```bash
 cd backend
-
-# Create and activate virtual environment
-python -m venv venv
-venv\Scripts\activate      # Windows (PowerShell/CMD)
-# source venv/bin/activate # macOS / Linux
-
-# Install dependencies
 pip install -r requirements.txt
 
-# Seed database with demo data (idempotent)
-python -m app.seed.seed_database
+# Windows PowerShell:  $env:DATABASE_URL="sqlite:///./opticapital.db"
+# macOS/Linux:
+export DATABASE_URL="sqlite:///./opticapital.db"
 
-# Start FastAPI server with live reload
-uvicorn app.main:app --reload --port 8000
+python -m app.seed.seed_database
+uvicorn app.main:app --reload
 ```
 
-#### Step 3: Setup & Run Frontend
+### Option B — PostgreSQL
+
 ```bash
-cd ../frontend
+docker compose up -d          # Postgres 16 on host port 5433
 
-# Install node dependencies
+cd backend
+pip install -r requirements.txt
+python -m app.seed.seed_database
+uvicorn app.main:app --reload
+```
+
+> The container maps host port **5433**, not 5432. A machine with PostgreSQL
+> already installed is listening on 5432, and Windows lets the container bind
+> the same port without complaint — connections then reach the pre-existing
+> server and fail with a confusing `role "capital_user" does not exist`.
+
+### Frontend
+
+```bash
+cd frontend
 npm install
-
-# Start Vite dev server
 npm run dev
 ```
 
----
+### Re-running the demo
 
-## 6. Hackathon Demo Flow (3 Minutes)
-
-The presentation follows a 5-phase story:
-1. **Healthy State (0:00 - 0:30):** Show ₹1.00 Cr capital in **SAFE (GREEN)** mode. AEGIS suppresses unnecessary trading.
-2. **The Shock (0:30 - 1:00):** Run **Market Crash** scenario (-30% Equity). Risk jumps to **84.6 (CRISIS / RED)**. Show threshold breaches.
-3. **Diagnosis & Control (1:00 - 1:45):** Risk Attribution reveals Equity is driving 91% of risk. CVXPY calculates the **minimum intervention** (Equity 38% $\to$ 20%, Cash 6% $\to$ 20%, turnover 18.5%, cost ₹3,520). Independent Validator certifies **PASS**.
-4. **Approval & Reverse Stress (1:45 - 2:30):** Click **[APPROVE REBALANCE]**. Score drops to **26.1 (GREEN)**. Trigger **Reverse Stress Testing** to prove that the portfolio's **Distance to Failure** expanded from 8% to 28%.
-5. **Audit Ledger (2:30 - 3:00):** Show immutable PostgreSQL history logging every calculation and approval.
-
-*See [`docs/AEGIS_DEMO_FLOW.md`](file:///c:/Users/HEMANT%20GUPTA/Documents/vibe/OptiCapital/docs/AEGIS_DEMO_FLOW.md) for word-for-word pitch narration and judge Q&A.*
-
----
-
-## 7. Core REST API Endpoints
-
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/health` | Health check & database connection probe |
-| `GET` | `/api/portfolio` | Retrieve portfolio valuation, cash, and holdings |
-| `GET` | `/api/risk` | Compute risk metrics & persist immutable snapshot |
-| `GET` | `/api/risk/attribution` | Euler marginal risk contribution per asset (Planned P1) |
-| `GET` | `/api/scenarios` | List stress scenarios and asset shock vectors |
-| `POST` | `/api/scenarios/run` | Execute forward stress simulation & dynamic control |
-| `POST` | `/api/stress/reverse` | Reverse stress test sweep & Distance to Failure (Planned P1) |
-| `POST` | `/api/optimize` | Run standalone minimum-intervention CVXPY optimizer |
-| `POST` | `/api/validate` | Independently validate candidate allocation (Planned P0) |
-| `POST` | `/api/rebalance` | Approve / reject rebalance & update simulated holdings |
-| `GET` | `/api/rebalance/history`| Chronological audit log of all rebalance decisions |
-
----
-
-## 8. Verification & Testing
+Approving a crisis rebalance rewrites the holdings, so the book stays
+defensive afterwards. To restore the starting state:
 
 ```bash
 cd backend
-pytest tests/ -v
+python -m app.seed.seed_database --reset
 ```
 
-Tests validate core financial invariants:
-- **Budget Sum:** $\sum w_i = 1.0 \pm 10^{-5}$
-- **Long-Only:** $w_i \ge 0 \quad \forall i$
-- **Risk Invariant:** Stressed rebalance reduces portfolio volatility
-- **Turnover & Cost:** $T \ge 0$, $C_{\text{txn}} \ge 0$
-- **Audit Integrity:** Decisions persist to PostgreSQL without mutation
+| Service | URL |
+|---|---|
+| Dashboard | http://localhost:5173 |
+| API | http://localhost:8000 |
+| API docs | http://localhost:8000/docs |
+
+Vite proxies `/api` to port 8000, so no CORS configuration is needed in
+development.
 
 ---
 
-## 9. License & Disclaimer
+## Tech stack
 
-This project is developed for hackathon evaluation and academic demonstration purposes only. It is not financial advice and is not intended for production trading execution.
+| Layer | Technology |
+|---|---|
+| Backend | Python 3.11+, FastAPI, SQLAlchemy 2.x |
+| Database | PostgreSQL 16 (SQLite supported) |
+| Optimiser | CVXPY (SCS) |
+| Frontend | React 19, TypeScript, Vite, Tailwind v4 |
+| Visualisation | d3-force, Recharts |
+| Infra | Docker Compose |
+
+---
+
+## The five views
+
+| # | View | Question it answers |
+|---|---|---|
+| 01 | Overview | Is the portfolio operating safely? |
+| 02 | Risk Attribution | Where is the risk coming from? |
+| 03 | Contagion | What is connected to what? |
+| 04 | Stress Studio | What breaks us, and what then? |
+| 05 | Execution Ledger | What did we decide, and why? |
+
+They are one control loop, not five pages: the live regime and any
+outstanding decision travel with you across all of them, and the interface
+takes its accent colour from the live risk regime, so colour always means
+risk.
+
+---
+
+## Demo flow
+
+1. Open the dashboard — **SAFE**, risk 22.8, no breaches, *no intervention required*.
+2. Stress Studio → **Normal Market** → run. Verdict is **HOLD**, turnover **0.0%**.
+   The system declining to act is the point.
+3. Stress Studio → **Market Crash** → run. Risk **22.8 → 62.3**, regime escalates
+   to **STRESS**, three limits breached, constraints tighten automatically.
+4. Read the recommendation: 3 of 5 positions move, cost stated in rupees.
+5. **Approve** → holdings update, decision is written to the audit trail.
+6. Execution Ledger → the decision, with its full reasoning chain.
+7. Contagion → why the book was more fragile than its allocation chart suggested.
+
+---
+
+## API
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/health` | Health and database connectivity |
+| GET | `/api/portfolio` | Portfolio with holdings |
+| GET | `/api/risk` | Risk metrics, persists a snapshot |
+| GET | `/api/scenarios` | Scenarios with per-asset shocks |
+| POST | `/api/optimize` | Optimise at the current regime |
+| POST | `/api/scenarios/run` | Full scenario pipeline |
+| POST | `/api/rebalance` | Approve or reject a recommendation |
+| GET | `/api/rebalance/history` | Decision audit trail |
+| GET | `/api/optimization` | Recent optimiser runs |
+
+Details in [docs/api.md](docs/api.md).
+
+---
+
+## Testing
+
+```bash
+cd backend
+pytest -q                # 78 tests, no database setup required
+```
+
+```bash
+cd frontend
+npx tsc --noEmit && npm run build
+```
+
+The suite runs against a throwaway SQLite file created by the fixtures, so it
+needs neither Docker nor PostgreSQL.
+
+`tests/test_pipeline.py` covers the assembled control loop rather than
+formulas in isolation, and asserts the directional properties the product
+promises — a crash must *raise* risk, a benign scenario must trade nothing,
+an intervention must reduce risk. These exist because a serious defect once
+survived a fully passing unit suite: every formula was individually correct
+while the pipeline reported a *calmer* portfolio after a market crash.
+
+---
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | System layers and request flow |
+| [docs/financial-model.md](docs/financial-model.md) | Objective, risk score, stress repricing, constraints |
+| [docs/api.md](docs/api.md) | Endpoint reference |
+| [docs/database.md](docs/database.md) | Schema and relationships |
+| [docs/demo-script.md](docs/demo-script.md) | Presentation walkthrough |
+
+---
+
+## Audit trail
+
+11 tables. Every risk assessment, optimiser run, alert, recommendation and
+approval is persisted as an auditable event:
+
+`assets` · `portfolios` · `holdings` · `market_prices` · `risk_snapshots` ·
+`optimization_runs` · `optimization_allocations` · `scenarios` ·
+`scenario_shocks` · `alerts` · `rebalance_actions`
+
+Holds are recorded with the same weight as interventions. A system that only
+logs the times it acted cannot show that it declined to act — and restraint
+is the behaviour this product argues for.

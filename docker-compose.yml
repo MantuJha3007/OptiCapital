@@ -10,11 +10,21 @@ services:
       POSTGRES_PASSWORD: capital_password
       POSTGRES_DB: smart_capital
 
+    # Mapped to 5433 on the host. A machine with PostgreSQL already installed
+    # is listening on 5432, and Windows lets the container bind the same port
+    # without complaint — connections then reach the pre-existing server,
+    # which fails with a confusing "role capital_user does not exist".
     ports:
-      - "5432:5432"
+      - "5433:5432"
 
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U capital_user -d smart_capital"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
 
 volumes:
   postgres_data:

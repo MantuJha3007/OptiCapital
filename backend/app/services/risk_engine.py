@@ -57,12 +57,21 @@ def calculate_risk(
     weights_override: np.ndarray | None = None,
     cov_matrix: np.ndarray | None = None,
     mean_returns: np.ndarray | None = None,
+    drawdown_override: float | None = None,
+    stress_override: float | None = None,
 ) -> RiskResult:
     """Run the full risk engine calculation.
 
     If weights_override / cov_matrix / mean_returns are provided, they are
     used instead of being loaded from the database (useful for post-shock
     scenario calculations).
+
+    drawdown_override lets a caller supply a drawdown the price history cannot
+    know about. A scenario shock is itself a realised peak-to-trough decline,
+    and recomputing drawdown from unshocked history would silently discard it.
+
+    stress_override does the same for the market stress indicator, which is
+    otherwise derived from historical volatility and cannot see a regime break.
     """
     asset_ids, weights, exp_rets, vols, liq_scores, _ = get_holdings_data(portfolio)
 
@@ -91,6 +100,10 @@ def calculate_risk(
     else:
         max_dd = 0.0
 
+    # A shock loss is a real drawdown; take the worse of history and the event.
+    if drawdown_override is not None:
+        max_dd = max(max_dd, float(drawdown_override))
+
     liq = liquidity_ratio(weights, liq_scores)
     conc = concentration_hhi(weights)
 
@@ -100,6 +113,9 @@ def calculate_risk(
     else:
         hist_vol = float(np.mean(vols))
     stress = market_stress_indicator(port_vol, hist_vol)
+
+    if stress_override is not None:
+        stress = max(stress, float(stress_override))
 
     # Risk score
     score = compute_risk_score(port_vol, max_dd, conc, liq, stress)
