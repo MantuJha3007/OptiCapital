@@ -17,6 +17,10 @@ from app.core.formulas import (
     market_stress_indicator,
     compute_risk_score,
     risk_level_from_score,
+    value_at_risk,
+    conditional_value_at_risk,
+    sharpe_ratio,
+    risk_contributions,
 )
 from app.services.market_data_service import (
     get_price_dataframe,
@@ -24,7 +28,7 @@ from app.services.market_data_service import (
     get_historical_volatility,
     get_cumulative_portfolio_returns,
 )
-from app.services.portfolio_service import get_holdings_data
+from app.services.portfolio_service import get_holdings_data, get_asset_symbols
 
 
 class RiskResult:
@@ -40,6 +44,13 @@ class RiskResult:
         market_stress: float,
         risk_score: float,
         risk_level: str,
+        var_95: float = 0.0,
+        cvar_95: float = 0.0,
+        sharpe_ratio: float = 0.0,
+        regime: str = "CALM",
+        risk_contributions: dict[str, float] | None = None,
+        hhi_risk: float = 0.0,
+        correlation_matrix: dict[str, dict[str, float]] | None = None,
     ):
         self.expected_return = expected_return
         self.volatility = volatility
@@ -49,6 +60,14 @@ class RiskResult:
         self.market_stress = market_stress
         self.risk_score = risk_score
         self.risk_level = risk_level
+        self.var_95 = var_95
+        self.cvar_95 = cvar_95
+        self.sharpe_ratio = sharpe_ratio
+        self.regime = regime
+        self.risk_contributions = risk_contributions or {}
+        self.hhi_risk = hhi_risk
+        self.correlation_matrix = correlation_matrix or {}
+
 
 
 def calculate_risk(
@@ -105,6 +124,34 @@ def calculate_risk(
     score = compute_risk_score(port_vol, max_dd, conc, liq, stress)
     level = risk_level_from_score(score)
 
+    # Extended Institutional Metrics
+    v_95 = value_at_risk(port_vol, confidence=0.95, horizon_days=1)
+    cv_95 = conditional_value_at_risk(port_vol, confidence=0.95, horizon_days=1)
+    s_ratio = sharpe_ratio(port_return, port_vol)
+
+    if stress < 0.20:
+        regime = "CALM"
+    elif stress < 0.60:
+        regime = "TRANSITIONAL"
+    else:
+        regime = "CRISIS"
+
+    symbols = get_asset_symbols(portfolio)
+    rc_array = risk_contributions(weights, cov_matrix)
+    rc_dict = {
+        symbols[i]: float(round(rc_array[i], 4))
+        for i in range(min(len(symbols), len(rc_array)))
+    }
+    hhi_risk_val = float(np.sum(rc_array ** 2))
+
+    diag_std = np.sqrt(np.maximum(np.diag(cov_matrix), 1e-8))
+    outer_std = np.outer(diag_std, diag_std)
+    corr_mat = np.divide(cov_matrix, outer_std, out=np.eye(len(diag_std)), where=outer_std != 0)
+    corr_dict = {
+        s1: {s2: float(round(corr_mat[i, j], 3)) for j, s2 in enumerate(symbols) if j < len(corr_mat)}
+        for i, s1 in enumerate(symbols) if i < len(corr_mat)
+    }
+
     return RiskResult(
         expected_return=port_return,
         volatility=port_vol,
@@ -114,7 +161,15 @@ def calculate_risk(
         market_stress=stress,
         risk_score=score,
         risk_level=level,
+        var_95=v_95,
+        cvar_95=cv_95,
+        sharpe_ratio=s_ratio,
+        regime=regime,
+        risk_contributions=rc_dict,
+        hhi_risk=hhi_risk_val,
+        correlation_matrix=corr_dict,
     )
+
 
 
 def save_risk_snapshot(

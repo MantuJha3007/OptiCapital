@@ -58,3 +58,27 @@ def run_scenario_endpoint(
 
     result = run_scenario(db, portfolio, scenario)
     return result
+
+
+from pydantic import BaseModel, Field
+from app.services.reverse_stress_service import run_reverse_stress_test
+
+
+class ReverseStressRequest(BaseModel):
+    loss_threshold_pct: float = Field(default=0.10, ge=0.01, le=0.90, description="Target loss threshold fraction")
+
+
+@router.post("/scenarios/reverse-stress")
+def reverse_stress_endpoint(
+    request: ReverseStressRequest = ReverseStressRequest(),
+    db: Session = Depends(get_db),
+):
+    """Run Reverse Stress Testing: identifies the minimal shock combination needed
+    to breach a specified capital/drawdown threshold, scored by Mahalanobis distance.
+    """
+    portfolio = get_default_portfolio(db)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="No portfolio found.")
+
+    return run_reverse_stress_test(db, portfolio, request.loss_threshold_pct)
+

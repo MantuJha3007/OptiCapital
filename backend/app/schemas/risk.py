@@ -3,7 +3,7 @@
 from uuid import UUID
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class RiskMetrics(BaseModel):
@@ -16,9 +16,19 @@ class RiskMetrics(BaseModel):
     market_stress: float
     risk_score: float
     risk_level: str
+    var_95: float = 0.0
+    cvar_95: float = 0.0
+    sharpe_ratio: float = 0.0
+    regime: str = "CALM"
+    risk_contributions: dict[str, float] = {}
+    hhi_risk: float = 0.0
+    correlation_matrix: dict[str, dict[str, float]] = {}
+
 
 
 class RiskSnapshotOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     portfolio_id: UUID
     risk_score: float
@@ -31,8 +41,6 @@ class RiskSnapshotOut(BaseModel):
     market_stress: float | None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
 
 
 class RiskResponse(BaseModel):

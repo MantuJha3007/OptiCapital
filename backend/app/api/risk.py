@@ -31,6 +31,14 @@ def get_risk(db: Session = Depends(get_db)):
             market_stress=round(result.market_stress, 4),
             risk_score=round(result.risk_score, 1),
             risk_level=result.risk_level,
+            var_95=round(result.var_95, 4),
+            cvar_95=round(result.cvar_95, 4),
+            sharpe_ratio=round(result.sharpe_ratio, 2),
+            regime=result.regime,
+            risk_contributions=result.risk_contributions,
+            hhi_risk=round(result.hhi_risk, 4),
+            correlation_matrix=result.correlation_matrix,
         ),
         snapshot_id=snapshot.id,
     )
+

@@ -30,6 +30,19 @@ export interface Portfolio {
   updated_at: string;
 }
 
+export interface CustomHoldingInput {
+  symbol: string;
+  weight: number;
+}
+
+export interface CustomPortfolioPayload {
+  name: string;
+  total_capital: number;
+  risk_aversion: number;
+  holdings: CustomHoldingInput[];
+}
+
+
 export interface RiskMetrics {
   expected_return: number;
   volatility: number;
@@ -39,12 +52,52 @@ export interface RiskMetrics {
   market_stress: number;
   risk_score: number;
   risk_level: string;
+  var_95?: number;
+  cvar_95?: number;
+  sharpe_ratio?: number;
+  regime?: string;
+  risk_contributions?: Record<string, number>;
+  hhi_risk?: number;
+  correlation_matrix?: Record<string, Record<string, number>>;
 }
 
 export interface RiskResponse {
   metrics: RiskMetrics;
   snapshot_id: string;
 }
+
+export interface VulnerabilityItem {
+  symbol: string;
+  name: string;
+  weight: number;
+  single_asset_breach_drop: number;
+}
+
+export interface ReverseStressResult {
+  target_loss_pct: number;
+  target_loss_amount: number;
+  projected_loss_pct: number;
+  projected_loss_amount: number;
+  capital_before: number;
+  capital_after: number;
+  mahalanobis_distance_sigma: number;
+  plausibility: 'HIGH RISK' | 'MODERATE RISK' | 'RESILIENT';
+  minimal_shocks: Record<string, number>;
+  vulnerabilities: VulnerabilityItem[];
+  narrative: string;
+}
+
+export interface RebalanceHistoryItem {
+  id: string;
+  action: string;
+  approved: boolean;
+  transaction_cost: number | null;
+  risk_before: number | null;
+  risk_after: number | null;
+  reason: string | null;
+  created_at: string;
+}
+
 
 export interface ScenarioShock {
   asset_symbol: string;

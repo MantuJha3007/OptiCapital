@@ -5,6 +5,9 @@ import type {
   RiskResponse,
   Scenario,
   ScenarioRunResponse,
+  CustomPortfolioPayload,
+  ReverseStressResult,
+  RebalanceHistoryItem,
 } from './types';
 
 const BASE = '/api';
@@ -36,6 +39,12 @@ export const api = {
       body: JSON.stringify({ scenario_id: scenarioId }),
     }),
 
+  runReverseStress: (lossThresholdPct: number = 0.10) =>
+    request<ReverseStressResult>('/scenarios/reverse-stress', {
+      method: 'POST',
+      body: JSON.stringify({ loss_threshold_pct: lossThresholdPct }),
+    }),
+
   optimize: (riskAversion?: number) =>
     request<any>('/optimize', {
       method: 'POST',
@@ -48,5 +57,30 @@ export const api = {
       body: JSON.stringify({ optimization_id: optimizationId, approved }),
     }),
 
-  getRebalanceHistory: () => request<any[]>('/rebalance/history'),
+  saveCustomPortfolio: (payload: CustomPortfolioPayload) =>
+    request<{ portfolio: Portfolio; risk: RiskResponse }>('/portfolio/custom', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  resetToDemo: () =>
+    request<{ portfolio: Portfolio; risk: RiskResponse }>('/portfolio/custom', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Aegis Institutional Benchmark',
+        total_capital: 10000000,
+        risk_aversion: 2.5,
+        holdings: [
+          { symbol: 'EQUITY', weight: 0.40 },
+          { symbol: 'GOV_BONDS', weight: 0.25 },
+          { symbol: 'CORP_BONDS', weight: 0.15 },
+          { symbol: 'GOLD', weight: 0.10 },
+          { symbol: 'CASH', weight: 0.10 },
+        ],
+      }),
+    }),
+
+  getRebalanceHistory: () => request<RebalanceHistoryItem[]>('/rebalance/history'),
 };
+
+
