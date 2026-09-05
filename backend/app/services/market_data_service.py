@@ -74,3 +74,22 @@ def get_cumulative_portfolio_returns(
     portfolio_daily = daily.values @ weights
     cumulative = np.cumprod(1 + portfolio_daily)
     return cumulative
+
+
+def get_covariance_matrix(db: Session, symbols: list[str]) -> np.ndarray:
+    """Return annualized covariance matrix for a list of asset symbols."""
+    assets = db.query(Asset).filter(Asset.symbol.in_(symbols)).all()
+    asset_map = {a.symbol: a for a in assets}
+    ordered_ids = [asset_map[s].id for s in symbols if s in asset_map]
+    prices = get_price_dataframe(db, ordered_ids)
+    if not prices.empty and len(ordered_ids) == len(symbols):
+        _, cov = compute_annualized_stats(prices, [str(i) for i in ordered_ids])
+        return cov
+    # Fallback diagonal covariance based on asset volatility
+    vols = np.array([float(asset_map[s].volatility or 0.15) for s in symbols if s in asset_map])
+    corr = np.eye(len(symbols))
+    # Add modest cross-correlation
+    corr = corr * 0.7 + 0.3
+    np.fill_diagonal(corr, 1.0)
+    D = np.diag(vols)
+    return D @ corr @ D

@@ -27,6 +27,11 @@ try:
         RISK_LEVEL_WARNING,
         RISK_LEVEL_STRESS,
         RISK_LEVEL_CRISIS,
+        ENVELOPE_GREEN,
+        ENVELOPE_YELLOW,
+        ENVELOPE_ORANGE,
+        ENVELOPE_RED,
+        RISK_ENVELOPE_MAP,
     )
 except ImportError:
     from .constants import (
@@ -40,6 +45,11 @@ except ImportError:
         RISK_LEVEL_WARNING,
         RISK_LEVEL_STRESS,
         RISK_LEVEL_CRISIS,
+        ENVELOPE_GREEN,
+        ENVELOPE_YELLOW,
+        ENVELOPE_ORANGE,
+        ENVELOPE_RED,
+        RISK_ENVELOPE_MAP,
     )
 
 
@@ -137,6 +147,45 @@ def risk_level_from_score(score: float) -> str:
         return RISK_LEVEL_STRESS
     else:
         return RISK_LEVEL_CRISIS
+
+
+def operating_envelope_from_level(level: str) -> str:
+    """Map risk level to operating envelope color string."""
+    return RISK_ENVELOPE_MAP.get(level, ENVELOPE_GREEN)
+
+
+def operating_envelope_from_score(score: float) -> str:
+    """Map risk score directly to operating envelope color."""
+    level = risk_level_from_score(score)
+    return operating_envelope_from_level(level)
+
+
+def is_intervention_required(score_or_level: float | str) -> bool:
+    """Determine if risk breach warrants active portfolio intervention.
+    
+    Intervention is required for high risk (STRESS / ORANGE) and crisis (CRISIS / RED).
+    """
+    if isinstance(score_or_level, (int, float)):
+        level = risk_level_from_score(score_or_level)
+    else:
+        level = score_or_level
+    return level in (RISK_LEVEL_STRESS, RISK_LEVEL_CRISIS)
+
+
+def value_at_risk_95(volatility: float, expected_return: float = 0.08) -> float:
+    """Annualized 95% Value at Risk (parametric normal).
+    
+    VaR_95 = 1.6449 * sigma - mu
+    """
+    return float(max(1.64485 * volatility - expected_return, 0.0))
+
+
+def conditional_value_at_risk_95(volatility: float, expected_return: float = 0.08) -> float:
+    """Annualized 95% Conditional Value at Risk / Expected Shortfall.
+    
+    CVaR_95 = (phi(1.6449) / 0.05) * sigma - mu approx 2.0627 * sigma - mu
+    """
+    return float(max(2.06271 * volatility - expected_return, 0.0))
 
 
 def transaction_cost(

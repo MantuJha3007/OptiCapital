@@ -14,6 +14,16 @@ scipy
 cvxpy
 
 python-dotenv
+python-multipart
+
+# ML, NLP & RAG Vector Search
+scikit-learn
+pypdf
+python-docx
+
+# LLM & AI Copilot Integration
+groq
 
 pytest
 httpx
+

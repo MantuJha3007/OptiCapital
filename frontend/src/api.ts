@@ -8,6 +8,11 @@ import type {
   CustomPortfolioPayload,
   ReverseStressResult,
   RebalanceHistoryItem,
+  AEGISMasterState,
+  RiskAttributionResponse,
+  CopilotAssessment,
+  MarketProviderStatus,
+  DocumentItem,
 } from './types';
 
 const BASE = '/api';
@@ -81,6 +86,85 @@ export const api = {
     }),
 
   getRebalanceHistory: () => request<RebalanceHistoryItem[]>('/rebalance/history'),
+
+  getMasterState: () => request<AEGISMasterState>('/state/master'),
+
+  getRiskAttribution: () => request<RiskAttributionResponse>('/risk/attribution'),
+
+  getMarketRegime: () => request<any>('/market/regime'),
+
+  getMarketContagion: (isStressed = false) =>
+    request<any>(`/market/contagion?is_stressed=${isStressed}`),
+
+  queryRAG: (query: string, topK = 3) =>
+    request<any[]>('/rag/query', {
+      method: 'POST',
+      body: JSON.stringify({ query, top_k: topK }),
+    }),
+
+  chatCopilot: (
+    query?: string,
+    screenContext: any = 'COMMAND_CENTER',
+    conversationHistory?: Array<{ role: string; content: string }>
+  ) =>
+    request<CopilotAssessment>('/risk-manager/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        query,
+        screen_context: screenContext,
+        conversation_history: conversationHistory,
+      }),
+    }),
+
+  getCopilotContext: () =>
+    request<any>('/copilot/context'),
+
+  getMarketProvider: () =>
+    request<MarketProviderStatus>('/market/provider'),
+
+  switchMarketProvider: (provider: string) =>
+    request<any>('/market/provider', {
+      method: 'POST',
+      body: JSON.stringify({ provider }),
+    }),
+
+  uploadMarketCSV: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch('/api/market/upload-csv', {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || 'Upload failed');
+    }
+    return res.json();
+  },
+
+  getMarketHistory: (lookbackDays = 60) =>
+    request<any>(`/market/history?lookback_days=${lookbackDays}`),
+
+  getDocuments: () =>
+    request<{ total_documents: number; total_chunks: number; documents: DocumentItem[] }>('/documents'),
+
+  uploadDocument: async (file: File, documentType = 'COMPANY_POLICY') => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('document_type', documentType);
+    const res = await fetch('/api/documents/upload', {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || 'Upload failed');
+    }
+    return res.json();
+  },
+
+  deleteDocument: (docId: string) =>
+    request<any>(`/documents/${docId}`, { method: 'DELETE' }),
 };
 
 

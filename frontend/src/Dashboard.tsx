@@ -7,11 +7,14 @@ import {
   AlertTriangle,
   RefreshCw,
   Building2,
+  Database,
 } from 'lucide-react';
 
 import { api } from './api';
-import type { Portfolio, RiskResponse, Scenario } from './types';
+import type { Portfolio, RiskResponse, Scenario, AEGISMasterState } from './types';
 import { PortfolioConfigModal } from './PortfolioConfigModal';
+import { DataCenterModal } from './DataCenterModal';
+import { FloatingCopilot } from './FloatingCopilot';
 import { TabNavigation, type DashboardTab } from './components/TabNavigation';
 import { CommandCenterTab } from './components/CommandCenterTab';
 import { PortfolioIntelligenceTab } from './components/PortfolioIntelligenceTab';
@@ -27,6 +30,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [configModalOpen, setConfigModalOpen] = useState<boolean>(false);
+  const [dataCenterOpen, setDataCenterOpen] = useState<boolean>(false);
+  const [masterState, setMasterState] = useState<AEGISMasterState | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [isOptimizing, setIsOptimizing] = useState<boolean>(false);
 
@@ -35,14 +40,16 @@ export default function Dashboard() {
     setLoading(true);
     setError(null);
     try {
-      const [p, r, s] = await Promise.all([
+      const [p, r, s, ms] = await Promise.all([
         api.getPortfolio(),
         api.getRisk(),
         api.getScenarios(),
+        api.getMasterState().catch(() => null),
       ]);
       setPortfolio(p);
       setRisk(r);
       setScenarios(s);
+      if (ms) setMasterState(ms);
     } catch (err: any) {
       setError(err.message || 'Failed to connect to Aegis API backend.');
     } finally {
@@ -168,6 +175,16 @@ export default function Dashboard() {
               Reset Demo
             </button>
 
+            {/* Data Center: Market Feeds & RAG Docs */}
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setDataCenterOpen(true)}
+              title="Data Center: Feeds & Regulatory Policies"
+            >
+              <Database size={14} />
+              Data Center
+            </button>
+
             {/* Company portfolio configurator */}
             <button className="btn btn-primary btn-sm" onClick={() => setConfigModalOpen(true)}>
               <Sliders size={14} />
@@ -254,6 +271,16 @@ export default function Dashboard() {
           <span>{toast}</span>
         </div>
       )}
+
+      {/* ─── Institutional AI Copilot Drawer ─── */}
+      <FloatingCopilot activeTab={activeTab} masterState={masterState} />
+
+      {/* ─── Data Center Modal (Market Providers & Documents) ─── */}
+      <DataCenterModal
+        isOpen={dataCenterOpen}
+        onClose={() => setDataCenterOpen(false)}
+        onStateRefresh={loadData}
+      />
     </div>
   );
 }
