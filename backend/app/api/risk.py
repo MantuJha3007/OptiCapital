@@ -31,6 +31,23 @@ def get_risk(db: Session = Depends(get_db)):
             market_stress=round(result.market_stress, 4),
             risk_score=round(result.risk_score, 1),
             risk_level=result.risk_level,
+            risk_status=result.risk_status,
+            operating_envelope=result.operating_envelope,
+            intervention_required=result.intervention_required,
+            var_95=round(result.var_95, 4),
+            cvar_95=round(result.cvar_95, 4),
         ),
         snapshot_id=snapshot.id,
     )
+
+
+@router.get("/risk/attribution")
+def get_risk_attribution(db: Session = Depends(get_db)):
+    """Calculate Euler marginal and percentage risk attribution."""
+    from app.services.risk_attribution import compute_risk_attribution
+
+    portfolio = get_default_portfolio(db)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="No portfolio found.")
+
+    return compute_risk_attribution(db, portfolio)

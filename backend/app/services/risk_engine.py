@@ -17,6 +17,10 @@ from app.core.formulas import (
     market_stress_indicator,
     compute_risk_score,
     risk_level_from_score,
+    operating_envelope_from_level,
+    is_intervention_required,
+    value_at_risk_95,
+    conditional_value_at_risk_95,
 )
 from app.services.market_data_service import (
     get_price_dataframe,
@@ -40,6 +44,11 @@ class RiskResult:
         market_stress: float,
         risk_score: float,
         risk_level: str,
+        operating_envelope: str | None = None,
+        intervention_required: bool | None = None,
+        risk_status: str | None = None,
+        var_95: float | None = None,
+        cvar_95: float | None = None,
     ):
         self.expected_return = expected_return
         self.volatility = volatility
@@ -49,6 +58,16 @@ class RiskResult:
         self.market_stress = market_stress
         self.risk_score = risk_score
         self.risk_level = risk_level
+        self.operating_envelope = operating_envelope or operating_envelope_from_level(risk_level)
+        self.intervention_required = (
+            intervention_required
+            if intervention_required is not None
+            else is_intervention_required(risk_level)
+        )
+        self.risk_status = risk_status or risk_level
+        self.var_95 = var_95 if var_95 is not None else value_at_risk_95(volatility, expected_return)
+        self.cvar_95 = cvar_95 if cvar_95 is not None else conditional_value_at_risk_95(volatility, expected_return)
+
 
 
 def calculate_risk(
@@ -57,6 +76,10 @@ def calculate_risk(
     weights_override: np.ndarray | None = None,
     cov_matrix: np.ndarray | None = None,
     mean_returns: np.ndarray | None = None,
+    drawdown_override: float | None = None,
+    market_stress_override: float | None = None,
+    liquidity_override: float | None = None,
+    concentration_override: float | None = None,
 ) -> RiskResult:
     """Run the full risk engine calculation.
 
@@ -75,31 +98,49 @@ def calculate_risk(
     if cov_matrix is None or mean_returns is None:
         if prices.empty:
             # Fallback: construct diagonal covariance from asset volatilities
-            mean_returns = exp_rets
-            cov_matrix = np.diag(vols ** 2)
+            if mean_returns is None:
+                mean_returns = exp_rets
+            if cov_matrix is None:
+                cov_matrix = np.diag(vols ** 2)
         else:
-            mean_returns, cov_matrix = compute_annualized_stats(prices, asset_ids)
+            calc_means, calc_cov = compute_annualized_stats(prices, asset_ids)
+            if mean_returns is None:
+                mean_returns = calc_means
+            if cov_matrix is None:
+                cov_matrix = calc_cov
 
     # Core metrics
     port_return = portfolio_expected_return(weights, mean_returns)
     port_vol = portfolio_volatility(weights, cov_matrix)
 
-    # Drawdown from historical data
-    if not prices.empty:
+    # Drawdown from historical data or shock override
+    if drawdown_override is not None:
+        max_dd = max(drawdown_override, 0.0)
+    elif not prices.empty:
         cum_rets = get_cumulative_portfolio_returns(prices, weights, asset_ids)
         max_dd = maximum_drawdown(cum_rets)
     else:
         max_dd = 0.0
 
-    liq = liquidity_ratio(weights, liq_scores)
-    conc = concentration_hhi(weights)
+    if liquidity_override is not None:
+        liq = min(max(liquidity_override, 0.0), 1.0)
+    else:
+        liq = liquidity_ratio(weights, liq_scores)
+
+    if concentration_override is not None:
+        conc = min(max(concentration_override, 0.0), 1.0)
+    else:
+        conc = concentration_hhi(weights)
 
     # Market stress
-    if not prices.empty:
+    if market_stress_override is not None:
+        stress = min(max(market_stress_override, 0.0), 1.0)
+    elif not prices.empty:
         hist_vol = get_historical_volatility(prices)
+        stress = market_stress_indicator(port_vol, hist_vol)
     else:
         hist_vol = float(np.mean(vols))
-    stress = market_stress_indicator(port_vol, hist_vol)
+        stress = market_stress_indicator(port_vol, hist_vol)
 
     # Risk score
     score = compute_risk_score(port_vol, max_dd, conc, liq, stress)
@@ -137,3 +178,28 @@ def save_risk_snapshot(
     db.commit()
     db.refresh(snapshot)
     return snapshot
+
+
+def calculate_risk_from_metrics(
+    expected_return: float,
+    volatility: float,
+    max_drawdown: float,
+    liquidity: float,
+    concentration: float,
+    stress: float,
+) -> RiskResult:
+    """Convenience helper to compute composite risk score and envelope from scalar metrics."""
+    score = compute_risk_score(volatility, max_drawdown, concentration, liquidity, stress)
+    level = risk_level_from_score(score)
+    return RiskResult(
+        expected_return=expected_return,
+        volatility=volatility,
+        max_drawdown=max_drawdown,
+        liquidity_ratio=liquidity,
+        concentration=concentration,
+        market_stress=stress,
+        risk_score=score,
+        risk_level=level,
+        operating_envelope=operating_envelope_from_level(level),
+        intervention_required=is_intervention_required(level),
+    )

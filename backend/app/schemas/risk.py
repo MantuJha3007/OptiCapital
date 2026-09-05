@@ -16,6 +16,11 @@ class RiskMetrics(BaseModel):
     market_stress: float
     risk_score: float
     risk_level: str
+    risk_status: str | None = None
+    operating_envelope: str | None = None
+    intervention_required: bool | None = None
+    var_95: float | None = None
+    cvar_95: float | None = None
 
 
 class RiskSnapshotOut(BaseModel):

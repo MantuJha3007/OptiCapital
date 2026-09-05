@@ -23,6 +23,7 @@ from app.models import (  # noqa: F401
 
 from app.api import health, portfolio as portfolio_api, risk, optimization as opt_api
 from app.api import scenarios, rebalance as rebalance_api
+from app.api import master_state, market, reverse_stress, rag, copilot, learning
 
 
 @asynccontextmanager
@@ -33,9 +34,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Smart Capital Guard",
-    description="Financial capital management and risk-control MVP",
-    version="1.0.0",
+    title="AEGIS — Adaptive Capital Resilience & Risk-Control System",
+    description="Institutional capital preservation, market regime intelligence, and risk-control platform",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -51,8 +52,14 @@ app.add_middleware(
 
 # Register routers
 app.include_router(health.router, prefix="/api", tags=["Health"])
+app.include_router(master_state.router, prefix="/api", tags=["Master State"])
 app.include_router(portfolio_api.router, prefix="/api", tags=["Portfolio"])
 app.include_router(risk.router, prefix="/api", tags=["Risk"])
+app.include_router(market.router, prefix="/api", tags=["Market Intelligence"])
+app.include_router(reverse_stress.router, prefix="/api", tags=["Reverse Stress"])
+app.include_router(rag.router, prefix="/api", tags=["RAG Intelligence"])
+app.include_router(copilot.router, prefix="/api", tags=["AI Risk Manager"])
+app.include_router(learning.router, prefix="/api", tags=["Audit & Learning"])
 app.include_router(opt_api.router, prefix="/api", tags=["Optimization"])
 app.include_router(scenarios.router, prefix="/api", tags=["Scenarios"])
 app.include_router(rebalance_api.router, prefix="/api", tags=["Rebalance"])

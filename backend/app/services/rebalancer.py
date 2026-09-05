@@ -65,12 +65,14 @@ def save_rebalance_action(
 
 def approve_rebalance(
     db: Session,
-    optimization_id: UUID,
+    optimization_id: UUID | str,
 ) -> dict:
-    """Approve a rebalance: update simulated holdings in PostgreSQL.
-
-    Returns summary of what was done.
+    """Approve a rebalance: update simulated holdings in database, recalculate risk and resilience,
+    record audit trail, and generate before/after verification proof.
     """
+    if isinstance(optimization_id, str):
+        optimization_id = UUID(optimization_id)
+
     # Find the optimization run
     opt_run = (
         db.query(OptimizationRun)
@@ -103,7 +105,14 @@ def approve_rebalance(
 
     portfolio_value = float(portfolio.total_capital)
 
-    # Update holdings
+    # ── CAPTURE REAL PRE-REBALANCE STATE BEFORE modifying holdings ──
+    from app.services.risk_engine import calculate_risk
+    from app.services.reverse_stress import run_reverse_stress_sweep
+
+    risk_before_snapshot = calculate_risk(db, portfolio)
+    rev_before_snapshot = run_reverse_stress_sweep(db, portfolio)
+
+    # Update holdings with proposed optimal weights
     for alloc in allocations:
         holding = (
             db.query(Holding)
@@ -118,28 +127,88 @@ def approve_rebalance(
             holding.market_value = Decimal(str(round(alloc.new_weight * portfolio_value, 2)))
             holding.updated_at = datetime.utcnow()
 
-    # Mark rebalance as approved
-    if ra:
-        ra.approved = True
-
     # Update portfolio timestamp
     portfolio.updated_at = datetime.utcnow()
 
+    # Flush changes to DB so recalculation reflects new allocations
     db.commit()
 
+    # Recalculate actual risk and reverse stress on the updated portfolio
+    risk_recalculated = calculate_risk(db, portfolio)
+    rev_recalculated = run_reverse_stress_sweep(db, portfolio)
+
+    # Mark rebalance as approved and update audited post-risk score
+    if ra:
+        ra.approved = True
+        ra.risk_after = round(risk_recalculated.risk_score, 1)
+        db.commit()
+
+    # Use real pre-rebalance metrics (from snapshot captured before DB update)
+    risk_before_val = float(ra.risk_before) if ra and ra.risk_before is not None else round(risk_before_snapshot.risk_score, 1)
+    vol_before_val = float(opt_run.volatility_before) if opt_run.volatility_before is not None else round(risk_before_snapshot.volatility, 4)
+
+    # Construct comprehensive Before vs After Verification Proof using REAL computed values
+    before_after = {
+        "before": {
+            "risk_score": round(risk_before_val, 1),
+            "volatility": round(risk_before_snapshot.volatility, 4),
+            "volatility_pct": f"{round(risk_before_snapshot.volatility * 100, 1)}%",
+            "var_95": round(risk_before_snapshot.var_95, 4),
+            "var_95_pct": f"{round(risk_before_snapshot.var_95 * 100, 1)}%",
+            "cvar_95": round(risk_before_snapshot.cvar_95, 4),
+            "cvar_95_pct": f"{round(risk_before_snapshot.cvar_95 * 100, 1)}%",
+            "max_drawdown": round(risk_before_snapshot.max_drawdown, 4),
+            "max_drawdown_pct": f"{round(risk_before_snapshot.max_drawdown * 100, 1)}%",
+            "liquidity_ratio": round(risk_before_snapshot.liquidity_ratio, 4),
+            "liquidity_pct": f"{round(risk_before_snapshot.liquidity_ratio * 100, 1)}%",
+            "concentration": round(risk_before_snapshot.concentration, 4),
+            "operating_envelope": risk_before_snapshot.operating_envelope,
+            "distance_to_failure": rev_before_snapshot["distance_to_failure_pct"],
+            "resilience_score": rev_before_snapshot["resilience_score"],
+        },
+        "after": {
+            "risk_score": round(risk_recalculated.risk_score, 1),
+            "volatility": round(risk_recalculated.volatility, 4),
+            "volatility_pct": f"{round(risk_recalculated.volatility * 100, 1)}%",
+            "var_95": round(risk_recalculated.var_95, 4),
+            "var_95_pct": f"{round(risk_recalculated.var_95 * 100, 1)}%",
+            "cvar_95": round(risk_recalculated.cvar_95, 4),
+            "cvar_95_pct": f"{round(risk_recalculated.cvar_95 * 100, 1)}%",
+            "max_drawdown": round(risk_recalculated.max_drawdown, 4),
+            "max_drawdown_pct": f"{round(risk_recalculated.max_drawdown * 100, 1)}%",
+            "liquidity_ratio": round(risk_recalculated.liquidity_ratio, 4),
+            "liquidity_pct": f"{round(risk_recalculated.liquidity_ratio * 100, 1)}%",
+            "concentration": round(risk_recalculated.concentration, 4),
+            "operating_envelope": risk_recalculated.operating_envelope,
+            "distance_to_failure": rev_recalculated["distance_to_failure_pct"],
+            "resilience_score": rev_recalculated["resilience_score"],
+        },
+        "improvements": {
+            "risk_reduction": round(max(risk_before_val - risk_recalculated.risk_score, 0.0), 1),
+            "volatility_reduction_pct": f"{round((risk_before_snapshot.volatility - risk_recalculated.volatility) * 100, 1)}%",
+            "resilience_gain": round(max(rev_recalculated["resilience_score"] - rev_before_snapshot["resilience_score"], 0.0), 1),
+            "capital_preserved_est": f"₹{round(portfolio_value * max(risk_before_snapshot.volatility - risk_recalculated.volatility, 0.0) / 100_000 * 100_000, 2):.2f} L",
+        },
+    }
+
     return {
-        "status": "approved",
+        "status": "APPROVED",
+        "approved": True,
         "portfolio_id": str(opt_run.portfolio_id),
         "optimization_id": str(optimization_id),
-        "message": "Holdings updated successfully. Rebalance approved.",
+        "message": "Holdings updated in database. Risk and resilience successfully restored.",
+        "before_after": before_after,
     }
 
 
 def reject_rebalance(
     db: Session,
-    optimization_id: UUID,
+    optimization_id: UUID | str,
 ) -> dict:
-    """Reject a rebalance recommendation."""
+    """Reject a rebalance recommendation. Holdings remain unchanged."""
+    if isinstance(optimization_id, str):
+        optimization_id = UUID(optimization_id)
+
     ra = (
         db.query(RebalanceAction)
         .filter(RebalanceAction.optimization_id == optimization_id)
@@ -147,11 +216,13 @@ def reject_rebalance(
     )
     if ra:
         ra.approved = False
-        ra.reason = (ra.reason or "") + " [REJECTED BY USER]"
+        if not (ra.reason or "").endswith("[REJECTED BY USER]"):
+            ra.reason = (ra.reason or "") + " [REJECTED BY USER]"
         db.commit()
 
     return {
-        "status": "rejected",
+        "status": "REJECTED",
+        "approved": False,
         "optimization_id": str(optimization_id),
-        "message": "Rebalance recommendation rejected.",
+        "message": "Rebalance recommendation rejected by officer. Portfolio holdings remain unchanged.",
     }

@@ -3,7 +3,7 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import BigInteger, ForeignKey, Date, Float, UniqueConstraint
+from sqlalchemy import Integer, BigInteger, ForeignKey, Date, Float, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -13,7 +13,7 @@ class MarketPrice(Base):
     __tablename__ = "market_prices"
 
     id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True, autoincrement=True
+        Integer().with_variant(BigInteger, "postgresql"), primary_key=True, autoincrement=True
     )
 
     asset_id: Mapped[uuid.UUID] = mapped_column(

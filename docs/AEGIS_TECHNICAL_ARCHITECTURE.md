@@ -2,36 +2,45 @@
 
 **Product Identity:** AEGIS (Adaptive Capital Resilience & Risk-Control System)  
 **Document Status:** Canonical Technical Architecture  
-**Target Environment:** Dockerized Multi-Container System (FastAPI, React, PostgreSQL)  
+**Target Environments:** Native Python/Vite (Zero-Config SQLite) & Docker Multi-Container (PostgreSQL 16)  
+**Automated Test Status:** 97/97 Pytest Unit & Integration Tests Passing  
 
 ---
 
 ## 1. System Overview & Architectural Topology
 
-AEGIS is designed as a three-tier, service-oriented architecture with decoupled compute, state, and presentation layers.
+AEGIS is designed as a three-tier, service-oriented architecture with decoupled compute, state, and presentation layers, augmented by an embedded AI Copilot and Policy RAG intelligence layer.
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        TIER 1: PRESENTATION                            │
 │  React 18 + Vite SPA (TypeScript, Tailwind CSS v4, Recharts, Lucide)   │
+│  - 6 Operational Views (Command Center, Contagion, Attribution,        │
+│    Reverse Stress Lab, Portfolio & Capital, Audit & Outcomes)          │
+│  - Floating AI Risk Copilot (Screen Context Aware)                     │
+│  - Data Center Modal (Market Feeds & Policy Document RAG)              │
 │  Port: 5173 (Development) / 80 (Production Nginx)                      │
 └───────────────────────────────────┬────────────────────────────────────┘
-                                    │ HTTP / JSON REST API
+                                    │ HTTP / JSON REST API (22 Endpoints)
 ┌───────────────────────────────────▼────────────────────────────────────┐
 │                        TIER 2: APPLICATION & COMPUTE                   │
 │  FastAPI (Python 3.11+) + Uvicorn ASGI Server                          │
-│  - Financial Math Engine (NumPy, SciPy, Pandas)                        │
+│  - 14 Domain Service Engines                                           │
+│  - Quantitative Math Engine (NumPy, SciPy, Pandas)                     │
 │  - Convex Optimizer Engine (CVXPY with CLARABEL/OSQP/SCS)              │
-│  - Layered Service Domain Logic & Independent Validator                │
+│  - Independent Invariant Safety Validator (6 Gates)                    │
+│  - AI Intelligence (Groq Llama-3.3-70B + Fiduciary Fallback)           │
+│  - Policy RAG Engine (TF-IDF Vectorizer + Cosine Similarity)           │
+│  - Pluggable Market Data Subsystem (Demo / CSV / Live)                 │
 │  Port: 8000                                                            │
 └───────────────────────────────────┬────────────────────────────────────┘
-                                    │ SQLAlchemy 2.0 (psycopg2 / asyncpg)
+                                    │ SQLAlchemy 2.0 (psycopg2 / sqlite3)
 ┌───────────────────────────────────▼────────────────────────────────────┐
 │                        TIER 3: PERSISTENCE & AUDIT                     │
-│  PostgreSQL 16 Relational Database Engine                              │
-│  - 11 Core Normalized Tables                                           │
-│  - Immutable Audit Trails (Risk Snapshots, Runs, Rebalance Actions)    │
-│  Port: 5432                                                            │
+│  PostgreSQL 16 (Docker) OR SQLite 3 (Local Development)                │
+│  - 11 Core Normalized Relational Tables                                │
+│  - Immutable Audit Trails (Snapshots, Runs, Rebalance Actions)         │
+│  - Zero-Config Database File: opti_capital.db                          │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -42,296 +51,143 @@ AEGIS is designed as a three-tier, service-oriented architecture with decoupled 
 ### 2.1 Technology Stack
 - **Build Engine & Dev Server:** Vite 8.x
 - **Core Library:** React 18 / TypeScript (~6.0)
-- **Styling Architecture:** Tailwind CSS v4 + Vanilla CSS custom properties (`index.css` design system)
-- **Visualization:** Recharts 3.x (RadialBar, Pie, Bar, Cell)
+- **Styling Architecture:** Tailwind CSS v4 + Vanilla CSS custom properties (`frontend/src/index.css` design system)
+- **Visualization:** Recharts 3.x (Pie, Bar, Line, Cell) & custom SVG radial risk gauges
 - **Iconography:** Lucide-React
 
 ### 2.2 Component Hierarchy & Layout
 ```text
 App.tsx
-  └── Dashboard.tsx (Root Controller)
-        ├── Top Header Bar (Brand Identity, Capital Summary, Liveness Indicator)
-        ├── System Status Ribbon (SOE Zone Badge: GREEN/YELLOW/ORANGE/RED, Hysteresis Indicator)
-        ├── Primary Metrics Grid
-        │     ├── RiskGauge (RadialBar SVG Gauge, Score / 100, Operating Mode)
-        │     ├── PortfolioSummaryCard (Valuation, Return, Drawdown, Liquidity)
-        │     └── AllocationDonutChart (Recharts Pie Chart with Asset-Class Palette)
-        ├── Stress Lab Module
-        │     ├── ScenarioSelector (Normal Market, Market Crash, High Inflation)
-        │     ├── ShockPreviewMatrix (Per-asset shock table)
-        │     └── RunSimulationButton (Triggers POST /api/scenarios/run)
-        ├── Intervention & Recommendation Panel (Appears on breach/stress)
-        │     ├── ThresholdBreachBanner (List of violated boundary limits)
-        │     ├── BeforeAfterComparison (Side-by-side metric delta)
-        │     ├── AllocationDiffTable (Current vs Candidate weights, Delta %)
-        │     ├── FinancialFrictionSummary (Turnover %, Estimated Transaction Cost ₹)
-        │     ├── ValidationBadge (Independent Validator PASS/FAIL certification)
-        │     ├── NaturalLanguageExplanation (Synthesized explanation text)
-        │     └── ActionButtonGroup ([APPROVE REBALANCE], [REJECT RECOMMENDATION])
-        └── Audit Trail View
-              └── DecisionHistoryTable (Chronological list of optimizations & approvals)
+  └── Dashboard.tsx (Master Cockpit Controller)
+        ├── Top Header Bar (Brand Identity, Capital Summary, Feed Badge, Liveness Dot)
+        ├── Six-Tab Navigation Bar:
+        │     ├── 1. Command Center ('control')
+        │     │     ├── RiskGauge (180° SVG Radial Gauge, Score / 100, SOE Mode)
+        │     │     ├── PortfolioSummaryCard (Valuation, Expected Return, Drawdown, Liquidity)
+        │     │     ├── AllocationDonutChart (Recharts Pie Chart with Asset-Class Palette)
+        │     │     ├── Stress Lab Module (Scenario Selector: Crash, Inflation, Tech, Normal)
+        │     │     ├── Intervention & Recommendation Panel (Breaches, Proposed Weights Diff)
+        │     │     ├── Financial Friction Summary (Turnover %, Estimated Fee ₹)
+        │     │     ├── ValidationBadge (Independent Validator PASS/FAIL certification)
+        │     │     └── Action Buttons ([APPROVE REBALANCE], [REJECT])
+        │     ├── 2. Correlation Contagion ('contagion')
+        │     │     ├── Normal vs Stressed Heatmap Matrix
+        │     │     └── Contagion Shift Index Card
+        │     ├── 3. Euler Risk Attribution ('attribution')
+        │     │     ├── Capital Weight vs Risk Contribution Bar Chart
+        │     │     ├── Primary Risk Driver Callout Card
+        │     │     └── Marginal Risk Contribution (MCR) Table
+        │     ├── 4. Reverse Stress Lab ('reverse')
+        │     │     ├── Failure Threshold Slider (Default: 80.0 CRISIS)
+        │     │     ├── Critical Shock Multiplier (α*) & Distance to Failure (DtF)
+        │     │     ├── Capital Resilience Score (0–100)
+        │     │     └── Parameter Shock Progression Curve
+        │     ├── 5. Portfolio & Capital ('portfolio')
+        │     │     ├── Asset Weight Sliders with Budget Normalization
+        │     │     ├── Total Capital Input (₹50 L to ₹10 Cr)
+        │     │     └── [APPLY REBALANCE] & [RESET TO ₹1 CR] Controls
+        │     └── 6. Audit & Outcomes ('audit')
+        │           ├── Chronological Decision History Table
+        │           └── 5-Day Outcome Tracking (Capital Preserved, Loss Avoided ₹)
+        ├── DataCenterModal.tsx
+        │     ├── Market Provider Manager (Demo, CSV Upload with DB Persistence, Live Feed)
+        │     └── Institutional Policy Manager (File Ingestion, Chunk Stats, RAG Test Search)
+        └── FloatingCopilot.tsx
+              ├── Docked Chat Window with Minimize/Expand
+              ├── Screen Context Awareness Indicator
+              ├── Policy Citations with Expandable Excerpts
+              └── Fiduciary Synthesis Engine (Groq Llama-3.3-70B with Fallback)
 ```
 
-### 2.3 State Management & API Integration
-- State is managed via React hooks (`useState`, `useEffect`, `useCallback`) with declarative fetch lifecycles.
-- All API interactions are encapsulated within `frontend/src/api.ts` exposing typed asynchronous promises.
-- Custom response types are defined in `frontend/src/types.ts` mirroring backend Pydantic schemas.
+### 2.3 State Management & API Client
+- Master state is loaded via `api.getMasterState()` (`GET /api/state/master`) on initial load and following rebalance actions.
+- All API interactions are typed in `frontend/src/api.ts` returning TypeScript promises matching schemas in `frontend/src/types.ts`.
 
 ---
 
 ## 3. Backend Architecture (FastAPI + Python)
 
 ### 3.1 Design Pattern: Layered Domain Services
-The backend is structured to isolate HTTP concerns from financial mathematics and database transactions:
+The backend is structured to strictly isolate HTTP routing, financial mathematics, persistence, and AI orchestration:
 
 ```text
 [HTTP Request]
      │
      ▼
 [API Router Layer] (app/api/*.py)
-  - Deserializes & validates payloads via Pydantic schemas (app/schemas/*.py)
+  - Validates schemas via Pydantic v2 (app/schemas/*.py)
   - Injects database session via FastAPI Depends(get_db)
   - Catches domain exceptions and maps them to HTTP status codes
      │
      ▼
 [Domain Service Layer] (app/services/*.py)
-  - Coordinates financial workflows across specialized engines
-  - Stateless execution: pure input/output mathematical pipelines
+  - Pure Python domain orchestrators
+  - Coordinates quantitative pipelines and persistence
      │
      ▼
-[Financial Math & Formulation Layer] (app/core/*.py & CVXPY)
-  - Pure NumPy/SciPy linear algebra calculations
-  - Convex objective & constraint construction
+[Quant Core & Optimization] (app/core/, cvxpy, numpy, scipy)
+  - Covariance calculation, VaR/CVaR, Euler risk attribution
+  - Convex quadratic programming solver (CLARABEL / OSQP / SCS)
      │
      ▼
-[Persistence Layer] (app/models/*.py & SQLAlchemy)
-  - Session lifecycle management (commit, rollback, refresh)
-  - Persists snapshots, optimization records, allocations, and audit logs
-     │
-     ▼
-[HTTP Response]
+[Persistence Layer] (app/models/*.py, SQLAlchemy 2.0)
+  - Supports SQLite (zero-config) and PostgreSQL 16 (docker)
+  - Append-only immutable audit ledgers
 ```
 
-### 3.2 FastAPI Lifespan & Startup Sequence
-In `backend/app/main.py`:
-1. `lifespan` context manager initializes database tables on boot via `Base.metadata.create_all(bind=engine)`.
-2. Cross-Origin Resource Sharing (CORS) middleware is attached to permit requests from the Vite frontend.
-3. Routers are registered under `/api`:
-   - `health.router` $\to$ `/api/health`
-   - `portfolio.router` $\to$ `/api/portfolio`
-   - `risk.router` $\to$ `/api/risk`
-   - `opt_api.router` $\to$ `/api/optimize`, `/api/optimization`
-   - `scenarios.router` $\to$ `/api/scenarios`, `/api/scenarios/run`
-   - `rebalance_api.router` $\to$ `/api/rebalance`, `/api/rebalance/history`
+### 3.2 Service Catalog
+1. **`portfolio_service.py`**: Portfolio loading, asset vectors, updates, resets.
+2. **`market_data_service.py`**: Price returns, historical volatility, asset covariance matrices.
+3. **`risk_engine.py`**: 6 core metrics, VaR/CVaR, composite risk score (0–100), snapshot creation.
+4. **`control_engine.py`**: Safe Operating Envelope evaluation, limit breaches, anti-chattering hysteresis.
+5. **`optimizer.py`**: Minimum-intervention CVXPY quadratic programming with Euclidean tracking.
+6. **`validator.py`**: Independent invariant safety verification (6 checks).
+7. **`risk_attribution.py`**: Euler marginal and percentage risk decomposition.
+8. **`scenario_engine.py`**: Forward stress testing and recommendation pipeline.
+9. **`reverse_stress.py`**: Reverse stress sweep, critical shock multiplier $\alpha^*$, Distance to Failure.
+10. **`rebalancer.py`**: Human approval processing and database state transition.
+11. **`regime_service.py`**: Market regime classification (Calm, Stressed, Transition).
+12. **`contagion_service.py`**: Cross-asset correlation contagion matrices.
+13. **`prediction_service.py`**: EWMA volatility forecasting and breach probabilities.
+14. **`learning_service.py`**: 5-day simulated outcome tracking.
+15. **`document_service.py`**: Policy ingestion, chunking, and index management.
+16. **`rag_service.py`**: In-memory TF-IDF cosine similarity RAG retrieval.
+17. **`copilot_service.py`**: Institutional AI risk copilot orchestration and intent routing.
+18. **`llm_service.py`**: Groq Llama-3.3-70B API client with fallback handler.
+19. **`market_data/`**: Pluggable provider package (`Demo`, `CSV`, `Live`, `Manager`).
 
 ---
 
-## 4. Optimization Engine (CVXPY Mathematical Formulation)
+## 4. Quantitative Formulation & Optimization
 
-### 4.1 Problem Definition
-The optimization problem is formulated as a Quadratic Program (QP) executed by CVXPY:
-
-$$\min_{w \in \mathbb{R}^N} \quad f(w) = \frac{1}{2} \|w - w_0\|_2^2 + \gamma \sum_{i=1}^N |w_i - w_{0,i}| + \lambda w^T \Sigma w - \kappa w^T \mu$$
-
-Where:
-- $w$: Candidate weight vector (decision variable).
-- $w_0$: Current / post-shock weight vector.
-- $\frac{1}{2} \|w - w_0\|_2^2$: Minimum-intervention penalty (penalizes Euclidean divergence).
-- $\gamma \sum |w_i - w_{0,i}|$: $L_1$ turnover norm scaled by transaction cost coefficient.
-- $\lambda w^T \Sigma w$: Risk penalty on portfolio variance.
-- $\kappa w^T \mu$: Return maximization incentive (secondary objective).
-
-### 4.2 Convex Constraint Set
-$$\begin{aligned}
-\sum_{i=1}^N w_i &= 1.0 && \text{(Full investment)} \\
-w_i &\ge 0 \quad \forall i && \text{(Long-only; no short selling)} \\
-w_{\text{equity}} &\le \text{MaxEquity}_{\text{mode}} && \text{(Dynamic equity cap)} \\
-w_{\text{cash}} &\ge \text{MinCash}_{\text{mode}} && \text{(Dynamic cash liquidity floor)} \\
-w_i &\le w_i^{\max} \quad \forall i && \text{(Instrument upper bounds)} \\
-w_i &\ge w_i^{\min} \quad \forall i && \text{(Instrument lower bounds)} \\
-w^T \Sigma w &\le \sigma_{\max,\text{mode}}^2 && \text{(Dynamic volatility ceiling)}
-\end{aligned}$$
-
-### 4.3 Solver Infeasibility & Numerical Safeguards
-- **Primary Solver:** `cp.CLARABEL` / `cp.OSQP` with fallback to `cp.SCS`.
-- **Numerical Regularization:** Small numerical artifacts (e.g., $-10^{-16}$) are clipped to $0.0$, and the resulting vector is re-normalized:
-  $$w^* = \frac{\max(w^*, 0)}{\sum \max(w^*, 0)}$$
-- **Infeasibility Fallback:** If boundary conditions conflict under extreme stress, the system executes the **Deterministic Cash Sweep Fallback**:
-  1. Trim Equity to Mode Limit: $w_{\text{equity}} \leftarrow \text{MaxEquity}_{\text{mode}}$.
-  2. Shift excess weight into Cash: $w_{\text{cash}} \leftarrow w_{\text{cash}} + (w_{\text{equity}}^0 - \text{MaxEquity}_{\text{mode}})$.
-  3. Flag run status as `FEASIBLE_FALLBACK`.
-
----
-
-## 5. Independent Validator Architecture
-
-To maintain regulatory rigor, validation is strictly decoupled from the solver:
-
+### 4.1 Safe Operating Envelope Zones & Hysteresis
 ```text
-       ┌────────────────────────┐
-       │   CVXPY Optimizer      │
-       └───────────┬────────────┘
-                   │ Candidate Allocation (w*)
-                   ▼
-       ┌────────────────────────┐
-       │ Independent Validator  │
-       └───────────┬────────────┘
-                   │
-  ┌────────────────┴────────────────┐
-  │ Verification Checklist:         │
-  │ 1. abs(sum(w*) - 1.0) <= 1e-4   │
-  │ 2. all(w* >= -1e-5)             │
-  │ 3. w*[EQUITY] <= MaxEquity      │
-  │ 4. w*[CASH] >= MinCash          │
-  │ 5. sqrt(w*^T Σ w*) <= MaxVol    │
-  │ 6. max(w*) <= SingleAssetMax    │
-  └────────────────┬────────────────┘
-                   │
-         ┌─────────┴─────────┐
-         │                   │
-         ▼ (PASS)            ▼ (FAIL)
-    Status: "PASS"     Status: "BLOCKED"
-    Proceed to User    Trigger Fallback Rule
+Score:  0 ────────── 30 ────────── 60 ────────── 80 ────────── 100
+        [   GREEN   ] [   YELLOW   ] [   ORANGE   ] [    RED     ]
+            SAFE         CAUTION        WARNING         CRISIS
+            HOLD        ADVISORY       REBALANCE      PROTECTION
 ```
+- **Hysteresis Buffer:** Returning from a higher to lower risk zone requires clearing $\delta = 3.0$ below the boundary (e.g., exiting YELLOW to GREEN requires $S \le 27.0$).
+
+### 4.2 Minimum-Intervention Quadratic Program
+$$\min_{w \in \mathbb{R}^N} \quad \frac{1}{2} \|w - w_0\|_2^2 + \gamma \sum_{i=1}^N |w_i - w_{0,i}| + \lambda w^T \Sigma w - \kappa w^T \mu$$
+
+Subject to:
+$$\sum_{i=1}^N w_i = 1.0, \quad w_i \ge 0, \quad w_{\text{equity}} \le \text{MaxEquity}_{\text{zone}}, \quad w_{\text{cash}} \ge \text{MinCash}_{\text{zone}}$$
+
+### 4.3 Independent Safety Gates
+Every candidate portfolio produced by the optimizer must satisfy:
+1. $|\sum w_i - 1.0| \le 10^{-4}$ (Budget sum)
+2. $w_i \ge -10^{-6} \quad \forall i$ (Long-only)
+3. $w_{\text{equity}} \le \text{MaxEquity}_{\text{zone}} + 10^{-4}$ (Equity ceiling)
+4. $w_{\text{cash}} \ge \text{MinCash}_{\text{zone}} - 10^{-4}$ (Cash floor)
+5. $\max_i(w_i) \le 0.50 + 10^{-4}$ (Single asset concentration)
+6. $\sqrt{w^T \Sigma w} \le \sigma_{\max,\text{zone}} + 10^{-4}$ (Volatility ceiling)
 
 ---
 
-## 6. Database Architecture (PostgreSQL 16)
+## 5. Persistence Architecture
 
-### 6.1 Relational Schema & Table Definitions
-
-```text
- ┌───────────────┐        ┌───────────────┐        ┌──────────────────┐
- │    assets     │◄───────┤   holdings    │───────►│    portfolios    │
- └───────┬───────┘        └───────────────┘        └────────┬─────────┘
-         │                                                  │
-         │                ┌───────────────┐                 ├──────────────────────────┐
-         ├───────────────►│ market_prices │                 │                          │
-         │                └───────────────┘                 ▼                          ▼
-         │                                       ┌────────────────────┐      ┌──────────────────┐
-         │        ┌───────────────────────┐      │   risk_snapshots   │      │ optimization_runs│
-         ├───────►│    scenario_shocks    │      └────────────────────┘      └────────┬─────────┘
-         │        └───────────▲───────────┘                                           │
-         │                    │                                                       ▼
-         │        ┌───────────┴───────────┐      ┌────────────────────┐      ┌──────────────────┐
-         │        │       scenarios       │      │ rebalance_actions  │◄─────┤   optimization   │
-         │        └───────────────────────┘      └────────────────────┘      │   allocations    │
-         │                                                                   └──────────────────┘
-         │        ┌───────────────────────┐
-         └───────►│        alerts         │
-                  └───────────────────────┘
-```
-
-### 6.2 Table Specifications
-
-1. **`assets`**: Financial instrument registry.
-   - `id` (UUID, PK), `symbol` (VARCHAR 20, Unique), `name` (VARCHAR 100), `category` (VARCHAR 50), `expected_return` (FLOAT), `volatility` (FLOAT), `liquidity_score` (FLOAT), `min_weight` (FLOAT), `max_weight` (FLOAT).
-2. **`portfolios`**: Portfolio entity.
-   - `id` (UUID, PK), `name` (VARCHAR 100), `total_capital` (NUMERIC 15,2), `risk_aversion` (FLOAT), `created_at` (TIMESTAMP), `updated_at` (TIMESTAMP).
-3. **`holdings`**: Current portfolio composition.
-   - `id` (UUID, PK), `portfolio_id` (FK $\to$ portfolios), `asset_id` (FK $\to$ assets), `weight` (FLOAT), `market_value` (NUMERIC 15,2), `updated_at` (TIMESTAMP).
-4. **`market_prices`**: Historical daily price series.
-   - `id` (UUID, PK), `asset_id` (FK $\to$ assets), `price_date` (DATE), `open_price`, `high_price`, `low_price`, `close_price` (FLOAT), `volume` (BIGINT).
-5. **`risk_snapshots`**: Immutable record of calculated risk assessments.
-   - `id` (UUID, PK), `portfolio_id` (FK $\to$ portfolios), `risk_score` (FLOAT), `risk_level` (VARCHAR 20), `expected_return` (FLOAT), `volatility` (FLOAT), `max_drawdown` (FLOAT), `liquidity_ratio` (FLOAT), `concentration` (FLOAT), `market_stress` (FLOAT), `created_at` (TIMESTAMP).
-6. **`optimization_runs`**: Record of CVXPY optimization invocations.
-   - `id` (UUID, PK), `portfolio_id` (FK $\to$ portfolios), `risk_level` (VARCHAR 20), `risk_aversion` (FLOAT), `expected_return_before` (FLOAT), `volatility_before` (FLOAT), `expected_return_after` (FLOAT), `volatility_after` (FLOAT), `transaction_cost` (NUMERIC 15,2), `status` (VARCHAR 50), `created_at` (TIMESTAMP).
-7. **`optimization_allocations`**: Per-asset old vs new weight deltas for an optimization run.
-   - `id` (UUID, PK), `optimization_id` (FK $\to$ optimization_runs), `asset_id` (FK $\to$ assets), `old_weight` (FLOAT), `new_weight` (FLOAT).
-8. **`scenarios`**: Predefined macroeconomic scenarios.
-   - `id` (UUID, PK), `name` (VARCHAR 100), `description` (TEXT), `created_at` (TIMESTAMP).
-9. **`scenario_shocks`**: Asset-specific shock magnitudes per scenario.
-   - `id` (UUID, PK), `scenario_id` (FK $\to$ scenarios), `asset_id` (FK $\to$ assets), `shock_percentage` (FLOAT).
-10. **`alerts`**: Control engine threshold breach events.
-    - `id` (UUID, PK), `portfolio_id` (FK $\to$ portfolios), `risk_level` (VARCHAR 20), `metric` (VARCHAR 50), `threshold_value` (FLOAT), `actual_value` (FLOAT), `message` (TEXT), `created_at` (TIMESTAMP).
-11. **`rebalance_actions`**: Auditable record of recommendations and approvals.
-    - `id` (UUID, PK), `portfolio_id` (FK $\to$ portfolios), `optimization_id` (FK $\to$ optimization_runs), `action` (VARCHAR 50), `approved` (BOOLEAN), `transaction_cost` (NUMERIC 15,2), `risk_before` (FLOAT), `risk_after` (FLOAT), `reason` (TEXT), `created_at` (TIMESTAMP).
-
----
-
-## 7. Infrastructure & Deployment (Docker Compose)
-
-The multi-container stack is declared in `docker-compose.yml`:
-
-```yaml
-version: '3.8'
-
-services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: aegis_postgres
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-opti_capital}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: aegis_backend
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/opti_capital
-      CORS_ORIGINS: http://localhost:5173,http://localhost:3000
-    ports:
-      - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: aegis_frontend
-    ports:
-      - "5173:5173"
-    depends_on:
-      - backend
-
-volumes:
-  postgres_data:
-```
-
----
-
-## 8. Communication Protocols & Request Lifecycles
-
-### 8.1 Scenario Simulation & Control Sequence Diagram
-
-```text
-User          Frontend (React)         API (FastAPI)       Scenario/Risk Engine     Optimizer (CVXPY)    Validator      PostgreSQL
- │                   │                       │                      │                       │                │              │
- │── Click "RUN" ───►│                       │                      │                       │                │              │
- │                   │── POST /scenarios/run►│                      │                       │                │              │
- │                   │   {scenario_id}       │── Load Portfolio ───►│                       │                │              │
- │                   │                       │                      │── Fetch State/Prices─────────────────────────────────►│
- │                   │                       │                      │◄── Return Holdings/Prices─────────────────────────────│
- │                   │                       │                      │── Apply Shocks        │                │              │
- │                   │                       │                      │── Compute Stressed Risk                │              │
- │                   │                       │                      │── Detect SOE Breaches │                │              │
- │                   │                       │                      │── Formulate Bounds ──►│                │              │
- │                   │                       │                      │                       │── Solve QP ───►│              │
- │                   │                       │                      │                       │◄── Return w*───│              │
- │                   │                       │                      │── Validate Candidate w*───────────────►│              │
- │                   │                       │                      │◄── Certification (PASS/FAIL)───────────│              │
- │                   │                       │                      │── Persist Run & Snapshot─────────────────────────────►│
- │                   │                       │◄── Return JSON Resp──│                                                       │
- │                   │◄── Render Card & Diffs│                                                                              │
- │                   │                                                                                                      │
- │── Click "APPROVE"►│                                                                                                      │
- │                   │── POST /rebalance ───►│                                                                              │
- │                   │   {opt_id, approved}  │── Execute Holding Update ───────────────────────────────────────────────────►│
- │                   │                       │── Commit Audit Event ───────────────────────────────────────────────────────►│
- │                   │                       │◄── Return 200 OK ────│                                                       │
- │                   │◄── Show GREEN State ──│                                                                              │
-```
+- **PostgreSQL 16** (production) and **SQLite 3** (local zero-config) via SQLAlchemy 2.0.
+- 11 normalized tables ensuring full auditability of all assessments, breaches, and rebalances.
+- Append-only audit integrity ensures historical states can be reconstructed at any point in time.

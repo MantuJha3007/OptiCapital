@@ -352,3 +352,231 @@ body {
 .slide-down {
   animation: slideDown 0.5s ease-out;
 }
+
+/* ─── Operating Envelope Badges ─── */
+.envelope-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.envelope-badge.green {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
+}
+.envelope-badge.yellow {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+.envelope-badge.orange {
+  background: rgba(249, 115, 22, 0.15);
+  color: #f97316;
+  border: 1px solid rgba(249, 115, 22, 0.4);
+}
+.envelope-badge.red {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.3);
+  animation: pulse-crisis 1.8s ease-in-out infinite;
+}
+
+/* ─── Intervention Banner ─── */
+.intervention-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.1));
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: 12px;
+  margin-bottom: 20px;
+  animation: pulse-crisis 2s ease-in-out infinite;
+}
+
+/* ─── Validator Card ─── */
+.validator-card {
+  background: rgba(16, 185, 129, 0.04);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.08);
+}
+.validator-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+}
+.validator-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+}
+.validator-badge.pass {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.5);
+}
+.validator-badge.blocked {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+}
+
+.check-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-subtle);
+  margin-bottom: 6px;
+}
+.check-item.passed {
+  border-color: rgba(16, 185, 129, 0.2);
+}
+.check-item.failed {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+/* ─── Institutional Navigation Tabs ─── */
+.tab-navigation {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding: 4px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  overflow-x: auto;
+}
+.tab-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+.tab-button:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+.tab-button.active {
+  color: #fff;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(6, 182, 212, 0.2));
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.2);
+}
+
+/* ─── Market Regime Badges ─── */
+.regime-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.regime-pill.calm {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+.regime-pill.transition {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+.regime-pill.crisis {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+/* ─── Contagion & Cluster Cards ─── */
+.cluster-card {
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 12px;
+  transition: transform 0.2s, border-color 0.2s;
+}
+.cluster-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  transform: translateY(-2px);
+}
+
+/* ─── Copilot Chat Console ─── */
+.copilot-chat-box {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 0 24px rgba(99, 102, 241, 0.1);
+}
+.copilot-q-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.copilot-q-btn:hover {
+  background: rgba(99, 102, 241, 0.15);
+  color: #fff;
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+/* ─── Audit Outcome Table ─── */
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.audit-table th {
+  text-align: left;
+  padding: 12px 14px;
+  background: rgba(15, 23, 42, 0.8);
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+  font-weight: 600;
+}
+.audit-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.audit-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}

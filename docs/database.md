@@ -1,15 +1,24 @@
 # AEGIS Database Architecture & Schema Specification
 
-**Database Engine:** PostgreSQL 16  
+**Product Identity:** AEGIS (Adaptive Capital Resilience & Risk-Control System)  
+**Supported Database Engines:** PostgreSQL 16 (production/docker) & SQLite 3 (local zero-config default)  
 **ORM:** SQLAlchemy 2.0  
-**Migration Tool:** Alembic  
+**Migration & DDL:** Managed via SQLAlchemy metadata (`Base.metadata.create_all`)  
 **Seeding Script:** [`backend/app/seed/seed_database.py`](file:///c:/Users/HEMANT%20GUPTA/Documents/vibe/OptiCapital/backend/app/seed/seed_database.py)  
 
 ---
 
-## 1. Schema Overview
+## 1. Dual-Database Engine Compatibility
 
-The database stores the full lifecycle of capital monitoring, risk assessment, optimizer runs, and human approval events across **11 normalized tables**.
+AEGIS provides first-class dual compatibility for both **PostgreSQL** and **SQLite**:
+- **SQLite 3 (Default Local):** If `DATABASE_URL` is omitted, the system defaults to `sqlite:///./opti_capital.db`. String-based UUIDs (UUID4 strings) and float/numeric abstractions are used to ensure zero-setup developer convenience.
+- **PostgreSQL 16 (Production & Docker):** Set `DATABASE_URL=postgresql://user:pass@localhost:5432/opti_capital`. Provides multi-tenant concurrency, transactional isolation, and connection pooling.
+
+---
+
+## 2. Schema Overview
+
+The database stores the full lifecycle of capital monitoring, risk assessment, optimizer runs, and human approval events across **11 normalized relational tables**:
 
 ```text
  ┌───────────────┐        ┌───────────────┐        ┌──────────────────┐
@@ -35,11 +44,11 @@ The database stores the full lifecycle of capital monitoring, risk assessment, o
 
 ---
 
-## 2. Table Definitions
+## 3. Table Definitions
 
-### 2.1 `assets`
+### 3.1 `assets`
 Defines institutional investment instruments and their baseline risk parameters.
-- `id` (UUID, Primary Key)
+- `id` (String(36) UUID, Primary Key)
 - `symbol` (VARCHAR 20, Unique, Indexed) — e.g., `EQUITY`, `GOV_BONDS`, `CORP_BONDS`, `GOLD`, `CASH`
 - `name` (VARCHAR 100)
 - `category` (VARCHAR 50) — `EQUITY`, `BONDS`, `COMMODITY`, `CASH`
@@ -49,28 +58,28 @@ Defines institutional investment instruments and their baseline risk parameters.
 - `min_weight` (FLOAT) — Mandate lower allocation bound
 - `max_weight` (FLOAT) — Mandate upper allocation bound
 
-### 2.2 `portfolios`
+### 3.2 `portfolios`
 Represents managed institutional capital entities.
-- `id` (UUID, Primary Key)
+- `id` (String(36) UUID, Primary Key)
 - `name` (VARCHAR 100)
 - `total_capital` (NUMERIC 15,2) — Total fund valuation (default: ₹1,00,00,000 / ₹1 Crore)
 - `risk_aversion` (FLOAT) — Risk aversion coefficient $\lambda$
 - `created_at` (TIMESTAMP)
 - `updated_at` (TIMESTAMP)
 
-### 2.3 `holdings`
+### 3.3 `holdings`
 Active portfolio composition and market valuations.
-- `id` (UUID, Primary Key)
-- `portfolio_id` (UUID, Foreign Key $\to$ `portfolios.id`)
-- `asset_id` (UUID, Foreign Key $\to$ `assets.id`)
+- `id` (String(36) UUID, Primary Key)
+- `portfolio_id` (String(36) UUID, Foreign Key $\to$ `portfolios.id`)
+- `asset_id` (String(36) UUID, Foreign Key $\to$ `assets.id`)
 - `weight` (FLOAT) — Capital allocation weight $\in [0, 1]$
 - `market_value` (NUMERIC 15,2) — Valuation in INR
 - `updated_at` (TIMESTAMP)
 
-### 2.4 `market_prices`
+### 3.4 `market_prices`
 Daily OHLC market price history used to construct return series and covariance matrices.
-- `id` (UUID, Primary Key)
-- `asset_id` (UUID, Foreign Key $\to$ `assets.id`)
+- `id` (String(36) UUID, Primary Key)
+- `asset_id` (String(36) UUID, Foreign Key $\to$ `assets.id`)
 - `price_date` (DATE, Indexed)
 - `open_price` (FLOAT)
 - `high_price` (FLOAT)
@@ -78,10 +87,10 @@ Daily OHLC market price history used to construct return series and covariance m
 - `close_price` (FLOAT)
 - `volume` (BIGINT)
 
-### 2.5 `risk_snapshots`
+### 3.5 `risk_snapshots`
 Immutable audit log of all computed risk evaluations.
-- `id` (UUID, Primary Key)
-- `portfolio_id` (UUID, Foreign Key $\to$ `portfolios.id`)
+- `id` (String(36) UUID, Primary Key)
+- `portfolio_id` (String(36) UUID, Foreign Key $\to$ `portfolios.id`)
 - `risk_score` (FLOAT) — Normalized composite score $0–100$
 - `risk_level` (VARCHAR 20) — `SAFE`, `WARNING`, `STRESS`, `CRISIS`
 - `expected_return` (FLOAT)
@@ -92,10 +101,10 @@ Immutable audit log of all computed risk evaluations.
 - `market_stress` (FLOAT)
 - `created_at` (TIMESTAMP)
 
-### 2.6 `optimization_runs`
+### 3.6 `optimization_runs`
 Audit records of CVXPY optimization invocations.
-- `id` (UUID, Primary Key)
-- `portfolio_id` (UUID, Foreign Key $\to$ `portfolios.id`)
+- `id` (String(36) UUID, Primary Key)
+- `portfolio_id` (String(36) UUID, Foreign Key $\to$ `portfolios.id`)
 - `risk_level` (VARCHAR 20)
 - `risk_aversion` (FLOAT)
 - `expected_return_before` (FLOAT)
@@ -106,32 +115,32 @@ Audit records of CVXPY optimization invocations.
 - `status` (VARCHAR 50) — `OPTIMAL`, `FEASIBLE_FALLBACK`, `FAILED`
 - `created_at` (TIMESTAMP)
 
-### 2.7 `optimization_allocations`
+### 3.7 `optimization_allocations`
 Per-asset weight transitions for each optimization run.
-- `id` (UUID, Primary Key)
-- `optimization_id` (UUID, Foreign Key $\to$ `optimization_runs.id`)
-- `asset_id` (UUID, Foreign Key $\to$ `assets.id`)
+- `id` (String(36) UUID, Primary Key)
+- `optimization_id` (String(36) UUID, Foreign Key $\to$ `optimization_runs.id`)
+- `asset_id` (String(36) UUID, Foreign Key $\to$ `assets.id`)
 - `old_weight` (FLOAT)
 - `new_weight` (FLOAT)
 
-### 2.8 `scenarios`
+### 3.8 `scenarios`
 Predefined macroeconomic and financial stress scenario definitions.
-- `id` (UUID, Primary Key)
-- `name` (VARCHAR 100) — e.g., `Normal Market`, `Market Crash`, `High Inflation`
+- `id` (String(36) UUID, Primary Key)
+- `name` (VARCHAR 100) — e.g., `Normal Market`, `Market Crash`, `High Inflation`, `Tech Shock`
 - `description` (TEXT)
 - `created_at` (TIMESTAMP)
 
-### 2.9 `scenario_shocks`
+### 3.9 `scenario_shocks`
 Asset-specific shock magnitudes linked to scenarios.
-- `id` (UUID, Primary Key)
-- `scenario_id` (UUID, Foreign Key $\to$ `scenarios.id`)
-- `asset_id` (UUID, Foreign Key $\to$ `assets.id`)
+- `id` (String(36) UUID, Primary Key)
+- `scenario_id` (String(36) UUID, Foreign Key $\to$ `scenarios.id`)
+- `asset_id` (String(36) UUID, Foreign Key $\to$ `assets.id`)
 - `shock_percentage` (FLOAT) — e.g., $-0.30$ for $-30\%$
 
-### 2.10 `alerts`
+### 3.10 `alerts`
 Control engine threshold breach events.
-- `id` (UUID, Primary Key)
-- `portfolio_id` (UUID, Foreign Key $\to$ `portfolios.id`)
+- `id` (String(36) UUID, Primary Key)
+- `portfolio_id` (String(36) UUID, Foreign Key $\to$ `portfolios.id`)
 - `risk_level` (VARCHAR 20)
 - `metric` (VARCHAR 50)
 - `threshold_value` (FLOAT)
@@ -139,11 +148,11 @@ Control engine threshold breach events.
 - `message` (TEXT)
 - `created_at` (TIMESTAMP)
 
-### 2.11 `rebalance_actions`
+### 3.11 `rebalance_actions`
 Compliance and governance log of recommendations and human decisions.
-- `id` (UUID, Primary Key)
-- `portfolio_id` (UUID, Foreign Key $\to$ `portfolios.id`)
-- `optimization_id` (UUID, Foreign Key $\to$ `optimization_runs.id`)
+- `id` (String(36) UUID, Primary Key)
+- `portfolio_id` (String(36) UUID, Foreign Key $\to$ `portfolios.id`)
+- `optimization_id` (String(36) UUID, Foreign Key $\to$ `optimization_runs.id`)
 - `action` (VARCHAR 50) — `HOLD`, `REBALANCE`, `CRISIS_PROTECTION`
 - `approved` (BOOLEAN) — Human approval flag
 - `transaction_cost` (NUMERIC 15,2)
@@ -154,8 +163,19 @@ Compliance and governance log of recommendations and human decisions.
 
 ---
 
-## 3. Audit Integrity Principles
+## 4. Audit Integrity Principles
 
-1. **Immutability:** `risk_snapshots`, `optimization_runs`, and `alerts` are append-only. They are never updated or deleted.
-2. **State Traceability:** A rebalance approval updates `holdings`, but the prior state remains reconstructible via `optimization_allocations.old_weight` and `risk_snapshots`.
-3. **Foreign Key Integrity:** Cascading deletes are prevented on audit tables to prevent accidental data loss.
+1. **Immutability:** `risk_snapshots`, `optimization_runs`, `optimization_allocations`, and `rebalance_actions` are append-only. They are never updated or deleted.
+2. **State Traceability:** A rebalance approval updates `holdings`, but the prior state remains perfectly reconstructible via `optimization_allocations.old_weight` and `risk_snapshots`.
+3. **Foreign Key Integrity:** Cascading deletes are prevented on audit tables to guarantee zero historical data loss.
+
+---
+
+## 5. Idempotent Seeding (`backend/app/seed/seed_database.py`)
+
+Executing `python -m app.seed.seed_database` automatically:
+1. Creates all tables if they do not already exist.
+2. Seeds 5 foundational asset classes: `EQUITY` (38%), `GOV_BONDS` (25%), `CORP_BONDS` (15%), `GOLD` (16%), `CASH` (6%).
+3. Seeds the default ₹1,00,00,000 (₹1 Crore) Institutional Balanced Fund.
+4. Generates 250 daily historical OHLC price rows per asset.
+5. Populates the 4 macro stress scenarios and per-asset shock vectors (`Normal Market`, `Market Crash`, `High Inflation`, `Tech Shock`).

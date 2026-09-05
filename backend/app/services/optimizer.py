@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.optimization import OptimizationRun, OptimizationAllocation
 from app.models.asset import Asset
+from app.models.portfolio import Portfolio
 from app.core.formulas import (
     portfolio_expected_return,
     portfolio_volatility,
@@ -62,13 +63,17 @@ def optimize_portfolio(
     n = len(assets)
     w = cp.Variable(n)
 
-    # Objective: maximize return - risk_aversion * variance - txn cost
-    ret = mean_returns @ w
-    risk = cp.quad_form(w, cov_matrix)
+    # AEGIS Minimum-Intervention Formulation:
+    # 1. Minimize Euclidean deviation from existing weights: 0.5 * ||w - w_0||_2^2
+    # 2. Penalize turnover / transaction friction: gamma * ||w - w_0||_1
+    # 3. Penalize portfolio variance: lambda * w^T Sigma w
+    # 4. Moderate return incentive: - kappa * w^T mu
+    deviation = 0.5 * cp.sum_squares(w - current_weights)
     turnover = cp.norm1(w - current_weights)
-    txn = turnover * portfolio_value * cost_rate
+    risk = cp.quad_form(w, cov_matrix)
+    ret = mean_returns @ w
 
-    objective = cp.Maximize(ret - risk_aversion * risk - txn)
+    objective = cp.Minimize(deviation + 2.0 * turnover + risk_aversion * risk - 0.05 * ret)
 
     # Constraints
     cons = [
@@ -88,10 +93,11 @@ def optimize_portfolio(
     if "CASH" in symbol_to_idx:
         cons.append(w[symbol_to_idx["CASH"]] >= min_cash)
 
-    # Per-asset max weight from asset definitions
+    # Per-asset limits and mandatory single-asset concentration cap (<= 50%)
+    max_single_asset = constraints.get("max_single_asset", 0.50)
     for i, asset in enumerate(assets):
-        if asset.max_weight < 1.0:
-            cons.append(w[i] <= asset.max_weight)
+        upper_bound = min(asset.max_weight, max_single_asset)
+        cons.append(w[i] <= upper_bound)
         if asset.min_weight > 0.0:
             cons.append(w[i] >= asset.min_weight)
 
@@ -99,10 +105,13 @@ def optimize_portfolio(
     max_vol = constraints.get("max_volatility", 0.15)
     cons.append(cp.quad_form(w, cov_matrix) <= max_vol ** 2)
 
-    # Solve
+    # Solve with CLARABEL / OSQP / SCS
     problem = cp.Problem(objective, cons)
     try:
-        problem.solve(solver=cp.SCS, verbose=False)
+        try:
+            problem.solve(solver=cp.CLARABEL, verbose=False)
+        except Exception:
+            problem.solve(solver=cp.SCS, verbose=False)
     except Exception as e:
         return OptimizerResult(
             status="FAILED",
@@ -181,3 +190,75 @@ def save_optimization_run(
     db.commit()
     db.refresh(run)
     return run
+
+
+class ProposalResult:
+    """Convenience wrapper for proposed rebalancing action."""
+
+    def __init__(
+        self,
+        action_required: bool,
+        reason: str,
+        turnover: float,
+        estimated_cost: float,
+        target_weights: dict[str, float],
+    ):
+        self.action_required = action_required
+        self.reason = reason
+        self.turnover = turnover
+        self.estimated_cost = estimated_cost
+        self.target_weights = target_weights
+
+
+def propose_rebalance(db: Session, portfolio: Portfolio) -> ProposalResult:
+    """Generate deterministic minimum-intervention rebalance proposal."""
+    from app.services.portfolio_service import get_holdings_data, get_assets_ordered, get_asset_symbols
+    from app.services.risk_engine import calculate_risk
+    from app.services.control_engine import evaluate_controls
+    from app.services.market_data_service import get_price_dataframe, compute_annualized_stats
+    from app.core.formulas import portfolio_turnover
+
+    risk = calculate_risk(db, portfolio)
+    control = evaluate_controls(risk)
+    asset_ids, current_w, exp_rets, vols, _, _ = get_holdings_data(portfolio)
+    assets = get_assets_ordered(portfolio)
+    symbols = get_asset_symbols(portfolio)
+    val = float(portfolio.total_capital)
+
+    if not risk.intervention_required:
+        return ProposalResult(
+            action_required=False,
+            reason="Portfolio operating within Safe Operating Envelope.",
+            turnover=0.0,
+            estimated_cost=0.0,
+            target_weights={s: round(float(w), 4) for s, w in zip(symbols, current_w)},
+        )
+
+    prices = get_price_dataframe(db, [UUID(a) for a in asset_ids])
+    if not prices.empty:
+        mean_rets, cov_matrix = compute_annualized_stats(prices, asset_ids)
+    else:
+        mean_rets = exp_rets
+        cov_matrix = np.diag(vols ** 2)
+
+    res = optimize_portfolio(
+        mean_returns=mean_rets,
+        cov_matrix=cov_matrix,
+        current_weights=current_w,
+        assets=assets,
+        portfolio_value=val,
+        risk_aversion=settings.risk_aversion,
+        constraints=control.constraints,
+    )
+
+    t_over = float(portfolio_turnover(current_w, res.weights))
+    target_map = {s: round(float(w), 4) for s, w in zip(symbols, res.weights)}
+
+    return ProposalResult(
+        action_required=True,
+        reason=f"Risk score {risk.risk_score:.1f} breached envelope ({risk.operating_envelope}). Minimum intervention optimization computed.",
+        turnover=t_over,
+        estimated_cost=float(res.txn_cost),
+        target_weights=target_map,
+    )
+
