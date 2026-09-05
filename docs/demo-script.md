@@ -1,37 +1,59 @@
-# Demo Script
+# AEGIS Demo Script & Pitch Guide
 
-## Setup (before demo)
-1. `docker compose up -d`
-2. `cd backend && python -m app.seed.seed_database`
-3. `cd backend && uvicorn app.main:app --reload`
-4. `cd frontend && npm run dev`
+**Product Identity:** AEGIS (Adaptive Capital Resilience & Risk-Control System)  
+**Detailed 23-Step Script:** See [AEGIS_DEMO_FLOW.md](file:///c:/Users/HEMANT%20GUPTA/Documents/vibe/OptiCapital/docs/AEGIS_DEMO_FLOW.md)  
+**Target Duration:** 3 Minutes  
 
-## Live Demo Flow
+---
 
-### 1. Show Healthy Portfolio (30 seconds)
-- Open dashboard at http://localhost:5173
-- Point out: ₹1 Crore capital, SAFE risk level, allocation pie chart
-- "Our system monitors this portfolio in real-time"
+## 1. Setup (Prior to Demo)
 
-### 2. Run Market Crash (1 minute)
-- Select "Market Crash" scenario
-- Click "RUN SIMULATION"
-- Point out: risk jumps to CRISIS, volatility spikes, breaches appear
-- "The system automatically detects multiple threshold breaches"
+```bash
+docker compose up -d
+cd backend && python -m app.seed.seed_database
+cd backend && uvicorn app.main:app --reload
+cd frontend && npm run dev
+```
 
-### 3. Show Smart Response (1 minute)
-- Point out: dynamic constraints tightened (equity max → 20%, cash min → 20%)
-- Show recommended allocation vs current
-- Show transaction cost
-- "Our CVXPY optimizer found the optimal reallocation within crisis constraints"
+---
 
-### 4. Approve Rebalance (30 seconds)
-- Click "APPROVE REBALANCE"
-- Show updated holdings
-- "Every decision is stored as an auditable event in PostgreSQL"
+## 2. Live Demo Sequence
 
-### 5. Key Pitch Points
-- "Every risk assessment, optimization, and rebalance is persisted in PostgreSQL"
-- "The system explains WHY it makes each recommendation"
-- "Dynamic constraints adapt in real-time based on market conditions"
-- "This would work in a real financial institution — full audit trail"
+### Step 1: Healthy Baseline (30 seconds)
+- Open `http://localhost:5173`.
+- Highlight **₹1.00 Cr** capital, diversified allocation, and **SAFE (GREEN)** risk score (24.2 / 100).
+- *"AEGIS monitors capital within a dynamic Safe Operating Envelope. Notice it avoids unnecessary trading when conditions are safe."*
+
+### Step 2: The Macro Shock (45 seconds)
+- Select the **Market Crash** scenario (-30% Equity).
+- Click **[RUN SIMULATION]**.
+- Point out the risk score animating to **84.6 (CRISIS / RED)**.
+- Highlight the **Risk Attribution**: *"Equity alone accounts for 91% of stressed portfolio risk."*
+
+### Step 3: Minimum-Intervention Control (45 seconds)
+- Point out the Control Mode: `CRISIS_PROTECTION`.
+- Highlight the **CVXPY Minimum-Intervention proposal**:
+  - Equity reduced from 38% $\to$ 20%.
+  - Cash increased from 6% $\to$ 20%.
+  - Turnover is only 18.5%, holding transaction cost to **₹3,520**.
+- Point to the **Independent Validator**: *"All 6 safety invariants certified PASS before presenting to the risk officer."*
+
+### Step 4: Approval & Resilience Proof (30 seconds)
+- Click **[APPROVE REBALANCE]**.
+- Watch holdings update in PostgreSQL; risk score drops to **26.1 (SAFE / GREEN)**.
+- Trigger **Reverse Stress Testing**:
+  - Show the **Distance to Failure** expanding from **8.2%** to **28.4%**.
+  - *"We proved quantitatively that capital resilience has been restored."*
+
+### Step 5: Audit Trail & Wrap-up (30 seconds)
+- Scroll to the **Decision History** audit ledger.
+- *"Every assessment, breach, solver run, and human approval is immutably logged in PostgreSQL for regulatory audit."*
+
+---
+
+## 3. Key Differentiators to Emphasize
+
+1. **Closed-Loop Control vs Constant Churn:** *"We don't chase unconstrained optimal portfolios every minute. We keep capital resilient and intervene only when necessary."*
+2. **Minimum Intervention:** *"We make the smallest adjustment that restores safety, minimizing transaction friction."*
+3. **Reverse Stress Testing:** *"We don't just ask what happens in a crash; we show you how close your capital is to breaking before it does."*
+4. **Deterministic Math with AI Explanation:** *"Financial math is 100% deterministic and auditable; AI explains decisions without hallucinating trades."*
