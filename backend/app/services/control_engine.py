@@ -6,6 +6,7 @@ from app.core.constants import (
     RISK_LEVEL_STRESS,
     RISK_LEVEL_CRISIS,
 )
+from app.core.formulas import operating_envelope_from_level, is_intervention_required
 from app.core.risk_levels import RISK_LEVEL_CONSTRAINTS, NORMAL_CONSTRAINTS
 from app.services.risk_engine import RiskResult
 
@@ -18,10 +19,18 @@ class ControlResult:
         risk_level: str,
         constraints: dict,
         breaches: list[str],
+        operating_envelope: str | None = None,
+        intervention_required: bool | None = None,
     ):
         self.risk_level = risk_level
         self.constraints = constraints
         self.breaches = breaches
+        self.operating_envelope = operating_envelope or operating_envelope_from_level(risk_level)
+        self.intervention_required = (
+            intervention_required
+            if intervention_required is not None
+            else is_intervention_required(risk_level)
+        )
 
 
 def evaluate_controls(risk: RiskResult) -> ControlResult:

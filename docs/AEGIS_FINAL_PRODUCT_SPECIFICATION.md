@@ -3,7 +3,7 @@
 
 **Version:** 2.0  
 **Product Identity:** AEGIS (Adaptive Capital Resilience & Risk-Control System)  
-**Engineering Foundation:** Smart Capital Guard Codebase  
+**Authoritative Implementation Blueprint:** [CURRENT_SYSTEM_ARCHITECTURE.md](file:///c:/Users/HEMANT%20GUPTA/Documents/vibe/OptiCapital/CURRENT_SYSTEM_ARCHITECTURE.md)  
 **Status:** Canonical Master Specification  
 **Operational Scope:** Simulation & Decision-Support System (Non-Execution)  
 

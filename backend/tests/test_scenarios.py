@@ -88,6 +88,28 @@ class TestRiskIncreasesAfterCrash:
         # Concentration may change but portfolio should still be measurable
         assert hhi_after >= 0
 
+    def test_crash_increases_stressed_risk(self):
+        """Market Crash must increase stressed risk substantially."""
+        from app.database import SessionLocal
+        from app.models.portfolio import Portfolio
+        from app.models.scenario import Scenario
+        from app.services.scenario_engine import run_scenario
+
+        db = SessionLocal()
+        portfolio = db.query(Portfolio).first()
+        crash_scenario = db.query(Scenario).filter(Scenario.name == "Market Crash").first()
+
+        if portfolio and crash_scenario:
+            result = run_scenario(db, portfolio, crash_scenario)
+            assert result["stressed"]["risk_score"] > result["current"]["risk_score"]
+            assert result["stressed"]["risk_score"] >= 80.0
+            assert result["stressed"]["status"] == "RED"
+            assert result["stressed"]["risk_level"] == "CRISIS"
+            assert result["stressed"]["intervention_required"] is True
+            assert result["recommendation"]["validator"]["status"] == "PASS"
+            assert result["recommendation"]["validator"]["valid"] is True
+        db.close()
+
 
 class TestCrisisOptimization:
     def test_crisis_equity_constraint(self):

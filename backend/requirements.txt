@@ -1,19 +1,32 @@
+# Web Framework & Server
 fastapi
 uvicorn[standard]
+python-multipart
 
+# Database & Migrations
 sqlalchemy
 psycopg[binary]
 alembic
 
+# Configuration & Environment
 pydantic
 pydantic-settings
+python-dotenv
 
+# Quantitative Risk, Forecasting & Optimization
 numpy
 pandas
 scipy
 cvxpy
 
-python-dotenv
+# ML, NLP & RAG Vector Search
+scikit-learn
+pypdf
+python-docx
 
+# LLM & AI Copilot Integration
+groq
+
+# Testing & Client Utilities
 pytest
 httpx
