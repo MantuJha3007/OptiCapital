@@ -1,0 +1,20 @@
+services:
+
+  postgres:
+    image: postgres:16
+    container_name: smart-capital-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: capital_user
+      POSTGRES_PASSWORD: capital_password
+      POSTGRES_DB: smart_capital
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
