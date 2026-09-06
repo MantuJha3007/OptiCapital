@@ -23,7 +23,13 @@ from app.services.control_engine import evaluate_controls
 from app.services.optimizer import optimize_portfolio, save_optimization_run
 from app.services.explanation_service import generate_explanation
 from app.services.rebalancer import determine_action, save_rebalance_action
-from app.core.formulas import transaction_cost as calc_txn_cost, portfolio_turnover
+from app.core.constants import ACTION_HOLD
+from app.core.formulas import (
+    transaction_cost as calc_txn_cost,
+    portfolio_turnover,
+    shock_severity,
+    stress_covariance,
+)
 from app.config import settings
 
 
@@ -97,75 +103,36 @@ def run_scenario(
     # Load baseline market covariance
     prices = get_price_dataframe(db, [UUID(a) for a in asset_ids])
     if not prices.empty:
-        mean_rets, cov_matrix = compute_annualized_stats(prices, asset_ids)
+        mean_rets, base_cov = compute_annualized_stats(prices, asset_ids)
     else:
         mean_rets = exp_rets
-        cov_matrix = np.diag(vols ** 2)
+        base_cov = np.diag(vols ** 2)
 
-    # --- 4. Post-shock risk ---
-    shock_pcts = np.array([shock_map.get(aid, 0.0) for aid in asset_ids])
+    # --- 4. Post-shock risk under stressed covariance ---
+    asset_shocks = np.array([shock_map.get(aid, 0.0) for aid in asset_ids])
+    severity = shock_severity(asset_shocks, portfolio_loss)
+    cov_matrix = stress_covariance(base_cov, severity)
 
-    if portfolio_loss < -0.02:
-        loss_mag = abs(portfolio_loss)
-        # 1. Immediate cumulative drawdown compounding prior drawdown and shock
-        stressed_dd = 1.0 - (1.0 - risk_before.max_drawdown) * (1.0 - loss_mag)
+    # The shock's own loss is a realised drawdown that price history cannot see.
+    realised_drawdown = abs(min(portfolio_loss, 0.0))
 
-        # 2. Stressed volatility: asset vol surge & correlation breakdown
-        asset_stds = np.sqrt(np.maximum(np.diag(cov_matrix), 1e-8))
-        d_inv = np.diag(1.0 / asset_stds)
-        corr_matrix = d_inv @ cov_matrix @ d_inv
-
-        asset_vol_mult = 1.0 + np.abs(shock_pcts) * 7.5
-        asset_vol_mult = np.maximum(asset_vol_mult, 1.0 + loss_mag * 5.0)
-        stressed_stds = asset_stds * asset_vol_mult
-
-        stressed_corr = np.clip(corr_matrix + loss_mag * 2.5, -1.0, 1.0)
-        np.fill_diagonal(stressed_corr, 1.0)
-        stressed_cov = np.outer(stressed_stds, stressed_stds) * stressed_corr
-        stressed_cov = (stressed_cov + stressed_cov.T) / 2.0
-        min_eig = float(np.min(np.real(np.linalg.eigvals(stressed_cov))))
-        if min_eig < 0:
-            stressed_cov += np.eye(len(asset_ids)) * (-min_eig + 1e-6)
-
-        stressed_vol = float(np.sqrt(shocked_weights @ stressed_cov @ shocked_weights))
-
-        # 3. Market stress
-        stressed_stress = min(1.0, loss_mag * 7.0)
-
-        # 4. Stressed liquidity (haircut on shocked risk assets; cash stays 100% liquid)
-        liq_haircut = np.clip(1.0 - np.abs(shock_pcts) * 2.8, 0.15, 1.0)
-        for i, a in enumerate(assets):
-            if a.symbol == "CASH":
-                liq_haircut[i] = 1.0
-        stressed_liq = float(np.sum(shocked_weights * liq_scores * liq_haircut))
-
-        # 5. Risk-weighted concentration
-        marginal_risk = stressed_cov @ shocked_weights
-        risk_contrib = shocked_weights * marginal_risk / max(stressed_vol ** 2, 1e-8)
-        risk_hhi = float(np.sum(risk_contrib ** 2))
-        stressed_conc = max(float(np.sum(shocked_weights ** 2)), risk_hhi)
-
-        risk_after = calculate_risk(
-            db,
-            portfolio,
-            weights_override=shocked_weights,
-            cov_matrix=stressed_cov,
-            drawdown_override=stressed_dd,
-            market_stress_override=stressed_stress,
-            liquidity_override=stressed_liq,
-            concentration_override=stressed_conc,
-        )
-    else:
-        risk_after = calculate_risk(
-            db, portfolio, weights_override=shocked_weights
-        )
-
+    risk_after = calculate_risk(
+        db,
+        portfolio,
+        weights_override=shocked_weights,
+        cov_matrix=cov_matrix,
+        mean_returns=mean_rets,
+        drawdown_override=realised_drawdown,
+        stress_override=severity,
+    )
     save_risk_snapshot(db, portfolio.id, risk_after)
 
     # --- 5. Control engine ---
     control = evaluate_controls(risk_after)
 
     # --- 6. Optimizer ---
+    # Solved against the stressed covariance: the recommendation has to be
+    # safe in the regime the portfolio is actually in, not the calm one.
     opt_result = optimize_portfolio(
         mean_returns=mean_rets,
         cov_matrix=cov_matrix,
@@ -189,9 +156,15 @@ def run_scenario(
         old_weights=shocked_weights,
     )
 
-    # --- 8. Calculate post-optimization risk ---
+    # --- 8. Post-optimisation risk, measured in the same stressed regime ---
     risk_optimized = calculate_risk(
-        db, portfolio, weights_override=opt_result.weights
+        db,
+        portfolio,
+        weights_override=opt_result.weights,
+        cov_matrix=cov_matrix,
+        mean_returns=mean_rets,
+        drawdown_override=realised_drawdown,
+        stress_override=severity,
     )
 
     # --- 9. Independent Candidate Validation ---
@@ -201,8 +174,21 @@ def run_scenario(
     )
 
     # --- 10. Determine action and save ---
+    # On HOLD the recommendation is the current book. The optimiser still ran
+    # and its result is preserved in optimization_runs for audit, but the
+    # recommendation recorded and surfaced has to match the verdict: telling
+    # someone no intervention is required and then handing them a trade list
+    # and a bill is the contradiction this system exists to avoid.
     action = determine_action(risk_after, control)
-    txn_cost_val = opt_result.txn_cost
+
+    if action == ACTION_HOLD:
+        recommended_weights = shocked_weights
+        txn_cost_val = 0.0
+        risk_after_action = risk_after.risk_score
+    else:
+        recommended_weights = opt_result.weights
+        txn_cost_val = opt_result.txn_cost
+        risk_after_action = risk_optimized.risk_score
 
     rebalance = save_rebalance_action(
         db=db,
@@ -211,25 +197,31 @@ def run_scenario(
         action=action,
         transaction_cost=txn_cost_val,
         risk_before=risk_after.risk_score,
-        risk_after=risk_optimized.risk_score,
+        risk_after=risk_after_action,
         reason=generate_explanation(
             risk_before=risk_before,
             risk_after=risk_after,
             control=control,
             assets=assets,
             old_weights=shocked_weights,
-            new_weights=opt_result.weights,
+            new_weights=recommended_weights,
         ),
     )
 
     # --- 11. Build response ---
-    current_alloc_dict = {
-        symbols[i].lower(): round(float(shocked_weights[i]), 4)
+    allocation_dict = {
+        symbols[i].lower(): round(float(recommended_weights[i]), 4)
         for i in range(len(symbols))
     }
-    proposed_alloc_dict = {
-        symbols[i].lower(): round(float(opt_result.weights[i]), 4)
-        for i in range(len(symbols))
+
+    # The post-shock weights are the baseline the recommendation is measured
+    # against: turnover, cost and the explanation are all relative to the book
+    # as it stands AFTER the shock, not before it. Returning them explicitly
+    # stops the client having to re-derive the renormalisation, and stops the
+    # allocation table and the explanation quoting different "current" weights.
+    weights_after_shock = {
+        sym.lower(): round(float(shocked_weights[i]), 4)
+        for i, sym in enumerate(symbols)
     }
 
     shock_details = {}
@@ -269,11 +261,17 @@ def run_scenario(
             "volatility": round(risk_before.volatility, 4),
             "drawdown": round(risk_before.max_drawdown, 4),
             "liquidity": round(risk_before.liquidity_ratio, 4),
+            "weights_after": weights_after_shock,
+            "concentration": round(risk_before.concentration, 4),
+            "market_stress": round(risk_before.market_stress, 4),
+            "allocation": {symbols[i].lower(): round(float(weights[i]), 4) for i in range(len(symbols))},
+            "status": risk_before.operating_envelope,
         },
         "shock": {
             "details": shock_details,
             "portfolio_loss": round(portfolio_loss, 4),
             "portfolio_value_after": round(total_after_shock, 2),
+            "weights_after": weights_after_shock,
         },
         "after_shock": {
             "risk_score": round(risk_after.risk_score, 1),
@@ -295,15 +293,15 @@ def run_scenario(
         "recommendation": {
             "action": action,
             "optimization_id": str(opt_run.id),
-            "allocation": proposed_alloc_dict,
-            "current_allocation": current_alloc_dict,
-            "proposed_allocation": proposed_alloc_dict,
+            "allocation": allocation_dict,
+            "current_allocation": weights_after_shock,
+            "proposed_allocation": allocation_dict,
             "transaction_cost": round(txn_cost_val, 2),
             "turnover": round(
-                portfolio_turnover(shocked_weights, opt_result.weights), 4
+                portfolio_turnover(shocked_weights, recommended_weights), 4
             ),
             "risk_before": round(risk_after.risk_score, 1),
-            "risk_after": round(risk_optimized.risk_score, 1),
+            "risk_after": round(risk_after_action, 1),
             "intervention_required": risk_after.intervention_required,
             "explanation": rebalance.reason or "",
             "validator": validation.to_dict(),

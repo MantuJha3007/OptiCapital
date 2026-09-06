@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Any
 import pypdf
 
+from app.core.time import utcnow
+
 BASE_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 POLICIES_DIR = BASE_DATA_DIR / "policies"
 COMPANY_DOCS_DIR = BASE_DATA_DIR / "company_documents"
@@ -104,7 +106,7 @@ def chunk_text(
                 page=page,
                 section=current_section,
                 content=sub,
-                uploaded_at=datetime.utcnow().isoformat(),
+                uploaded_at=utcnow().isoformat(),
             ))
             chunk_idx += 1
         if end >= len(full_text):
@@ -207,7 +209,7 @@ def process_and_index_document(
         "document_id": doc_id,
         "filename": filename,
         "document_type": document_type,
-        "uploaded_at": datetime.utcnow().isoformat(),
+        "uploaded_at": utcnow().isoformat(),
         "chunk_count": len(doc_chunks),
         "file_size_kb": round(len(file_bytes) / 1024, 1),
         "file_path": str(save_path),
@@ -278,7 +280,7 @@ def _init_built_in_policies():
                     "document_id": doc_id,
                     "filename": file_path.name,
                     "document_type": "INTERNAL_POLICY",
-                    "uploaded_at": datetime.utcnow().isoformat(),
+                    "uploaded_at": utcnow().isoformat(),
                     "chunk_count": len(chunks),
                     "file_size_kb": round(len(text.encode("utf-8")) / 1024, 1),
                     "file_path": str(file_path),

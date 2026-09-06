@@ -4,6 +4,8 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
+from app.core.time import utcnow
+
 from sqlalchemy import ForeignKey, String, Float, Numeric, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -37,7 +39,7 @@ class OptimizationRun(Base):
     status: Mapped[str] = mapped_column(String(30), nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
+        DateTime, default=utcnow
     )
 
     # Relationships

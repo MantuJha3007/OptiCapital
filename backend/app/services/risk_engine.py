@@ -92,12 +92,20 @@ def calculate_risk(
     market_stress_override: float | None = None,
     liquidity_override: float | None = None,
     concentration_override: float | None = None,
+    stress_override: float | None = None,
 ) -> RiskResult:
     """Run the full risk engine calculation.
 
     If weights_override / cov_matrix / mean_returns are provided, they are
     used instead of being loaded from the database (useful for post-shock
     scenario calculations).
+
+    drawdown_override lets a caller supply a drawdown the price history cannot
+    know about. A scenario shock is itself a realised peak-to-trough decline,
+    and recomputing drawdown from unshocked history would silently discard it.
+
+    stress_override does the same for the market stress indicator, which is
+    otherwise derived from historical volatility and cannot see a regime break.
     """
     asset_ids, weights, exp_rets, vols, liq_scores, _ = get_holdings_data(portfolio)
 
@@ -125,14 +133,16 @@ def calculate_risk(
     port_return = portfolio_expected_return(weights, mean_returns)
     port_vol = portfolio_volatility(weights, cov_matrix)
 
-    # Drawdown from historical data or shock override
-    if drawdown_override is not None:
-        max_dd = max(drawdown_override, 0.0)
-    elif not prices.empty:
+    # Drawdown from historical data
+    if not prices.empty:
         cum_rets = get_cumulative_portfolio_returns(prices, weights, asset_ids)
         max_dd = maximum_drawdown(cum_rets)
     else:
         max_dd = 0.0
+
+    # A shock loss is a real drawdown; take the worse of history and the event.
+    if drawdown_override is not None:
+        max_dd = max(max_dd, float(drawdown_override))
 
     if liquidity_override is not None:
         liq = min(max(liquidity_override, 0.0), 1.0)
@@ -145,14 +155,15 @@ def calculate_risk(
         conc = concentration_hhi(weights)
 
     # Market stress
-    if market_stress_override is not None:
-        stress = min(max(market_stress_override, 0.0), 1.0)
-    elif not prices.empty:
+    if not prices.empty:
         hist_vol = get_historical_volatility(prices)
-        stress = market_stress_indicator(port_vol, hist_vol)
     else:
         hist_vol = float(np.mean(vols))
-        stress = market_stress_indicator(port_vol, hist_vol)
+    stress = market_stress_indicator(port_vol, hist_vol)
+
+    effective_stress_override = stress_override if stress_override is not None else market_stress_override
+    if effective_stress_override is not None:
+        stress = max(stress, float(effective_stress_override))
 
     # Risk score
     score = compute_risk_score(port_vol, max_dd, conc, liq, stress)

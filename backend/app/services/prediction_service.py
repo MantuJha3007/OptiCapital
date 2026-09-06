@@ -49,7 +49,7 @@ def predict_risk_conditions(
 
     # 2. Get market index returns from active provider
     provider = get_market_data_provider()
-    index_returns = provider.get_market_index(lookback_days=120).values
+    index_returns = np.asarray(provider.get_market_index(lookback_days=120).values, dtype=float)
     if len(index_returns) < 10:
         index_returns = np.random.normal(0.0004, 0.012, 100)
 

@@ -66,10 +66,13 @@ class DemoMarketDataProvider(MarketDataProvider):
         self._cached_prices = pd.DataFrame(price_dict, index=dates)
 
     def get_prices(self, symbols: list[str] | None = None, lookback_days: int = 250) -> pd.DataFrame:
+        if self._cached_prices is None:
+            self._generate_series()
+        assert self._cached_prices is not None
         df = self._cached_prices.tail(lookback_days)
         if symbols:
             valid_cols = [s for s in symbols if s in df.columns]
-            return df[valid_cols]
+            return pd.DataFrame(df[valid_cols])
         return df
 
     def get_returns(self, symbols: list[str] | None = None, lookback_days: int = 250) -> pd.DataFrame:

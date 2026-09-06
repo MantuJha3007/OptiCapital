@@ -13,7 +13,7 @@ Usage:
     cd backend
     python -m app.seed.seed_database
 """
-
+import argparse
 import uuid
 from datetime import date, timedelta
 from decimal import Decimal
@@ -27,6 +27,10 @@ from app.models.portfolio import Portfolio
 from app.models.holding import Holding
 from app.models.market_data import MarketPrice
 from app.models.scenario import Scenario, ScenarioShock
+from app.models.alert import Alert
+from app.models.rebalance import RebalanceAction
+from app.models.risk_snapshot import RiskSnapshot
+from app.models.optimization import OptimizationRun, OptimizationAllocation
 
 
 # ──────────────────────────────────────────────
@@ -35,43 +39,43 @@ from app.models.scenario import Scenario, ScenarioShock
 ASSETS = [
     {
         "symbol": "EQUITY",
-        "name": "Equity",
+        "name": "Nifty 50 Index Fund",
         "category": "EQUITY",
         "expected_return": 0.12,
-        "volatility": 0.22,
-        "liquidity_score": 0.90,
+        "volatility": 0.18,
+        "liquidity_score": 0.95,
         "min_weight": 0.0,
-        "max_weight": 0.50,
+        "max_weight": 0.60,
     },
     {
         "symbol": "GOV_BONDS",
-        "name": "Government Bonds",
-        "category": "BONDS",
+        "name": "10-Year Indian G-Sec",
+        "category": "FIXED_INCOME",
         "expected_return": 0.07,
-        "volatility": 0.06,
-        "liquidity_score": 0.95,
+        "volatility": 0.05,
+        "liquidity_score": 0.90,
         "min_weight": 0.0,
-        "max_weight": 1.0,
+        "max_weight": 0.60,
     },
     {
         "symbol": "CORP_BONDS",
-        "name": "Corporate Bonds",
-        "category": "BONDS",
-        "expected_return": 0.09,
-        "volatility": 0.10,
-        "liquidity_score": 0.70,
+        "name": "AAA Corporate Bond Fund",
+        "category": "FIXED_INCOME",
+        "expected_return": 0.085,
+        "volatility": 0.08,
+        "liquidity_score": 0.75,
         "min_weight": 0.0,
-        "max_weight": 0.30,
+        "max_weight": 0.40,
     },
     {
         "symbol": "GOLD",
-        "name": "Gold",
+        "name": "Gold ETF",
         "category": "COMMODITY",
-        "expected_return": 0.08,
+        "expected_return": 0.09,
         "volatility": 0.15,
         "liquidity_score": 0.85,
         "min_weight": 0.0,
-        "max_weight": 0.20,
+        "max_weight": 0.30,
     },
     {
         "symbol": "CASH",
@@ -85,12 +89,19 @@ ASSETS = [
     },
 ]
 
+# The demo book has to start comfortably INSIDE its own envelope, because the
+# product's central claim is that the correct action is usually no action. The
+# original 45/25/15/10/5 split sat exactly on two SAFE limits — HHI of 0.300
+# against a 0.300 ceiling and 5% cash against a 10% floor — so the engine
+# reported breaches at rest and even a benign scenario produced a rebalance.
+# This split gives HHI 0.254 and clears the cash floor, leaving the crash
+# scenarios to create the contrast.
 HOLDINGS_WEIGHTS = {
-    "EQUITY": 0.45,
-    "GOV_BONDS": 0.25,
+    "EQUITY": 0.37,
+    "GOV_BONDS": 0.27,
     "CORP_BONDS": 0.15,
     "GOLD": 0.10,
-    "CASH": 0.05,
+    "CASH": 0.11,
 }
 
 PORTFOLIO_CAPITAL = Decimal("10000000.00")  # ₹1 Crore
@@ -114,10 +125,25 @@ SCENARIOS = [
         "name": "Market Crash",
         "description": "Severe equity decline with flight to safety.",
         "shocks": {
-            "EQUITY": -0.30,
-            "GOV_BONDS": -0.05,
-            "CORP_BONDS": -0.10,
-            "GOLD": 0.12,
+            "EQUITY": -0.38,
+            "GOV_BONDS": -0.04,
+            "CORP_BONDS": -0.14,
+            "GOLD": 0.10,
+            "CASH": 0.0,
+        },
+    },
+    {
+        # The control engine defines four regimes, so at least one scenario has
+        # to be severe enough to exercise the upper bands. A systemic event is
+        # also the case where gold stops hedging and is sold for liquidity,
+        # which is precisely when correlation convergence hurts most.
+        "name": "Systemic Crisis",
+        "description": "Correlated selloff across risk assets; gold sold for liquidity.",
+        "shocks": {
+            "EQUITY": -0.50,
+            "GOV_BONDS": -0.08,
+            "CORP_BONDS": -0.25,
+            "GOLD": 0.04,
             "CASH": 0.0,
         },
     },
@@ -314,13 +340,56 @@ def seed_all(db: Session) -> None:
     print("\nSeeding complete!")
 
 
-def main():
-    """Entry point for seeding."""
-    # Create all tables
+def reset_all(db: Session) -> None:
+    """Drop every row and re-seed from scratch.
+
+    Approving a crisis rebalance rewrites the holdings, which is the whole
+    point — but it also means the demo book stays defensive afterwards and the
+    walkthrough cannot be repeated. This restores the starting state without
+    touching the schema or requiring the database to be recreated.
+    """
+    print("Resetting demo data...")
+    # Children before parents; the ORM classes carry the FK graph.
+    for model in (
+        RebalanceAction,
+        OptimizationAllocation,
+        OptimizationRun,
+        Alert,
+        RiskSnapshot,
+        ScenarioShock,
+        Scenario,
+        MarketPrice,
+        Holding,
+        Portfolio,
+        Asset,
+    ):
+        deleted = db.query(model).delete()
+        if deleted:
+            print(f"  Cleared {deleted} rows from {model.__tablename__}")
+    db.commit()
+
+
+def main() -> None:
+    """Entry point for seeding.
+
+    Usage:
+        python -m app.seed.seed_database            # idempotent seed
+        python -m app.seed.seed_database --reset    # wipe, then seed
+    """
+    parser = argparse.ArgumentParser(description="Seed the OptiCapital demo data.")
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="delete existing rows first, restoring the original demo book",
+    )
+    args = parser.parse_args()
+
     Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()
     try:
+        if args.reset:
+            reset_all(db)
         seed_all(db)
     finally:
         db.close()
@@ -328,3 +397,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

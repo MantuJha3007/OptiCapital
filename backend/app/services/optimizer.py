@@ -1,7 +1,6 @@
 """CVXPY optimizer — mean-variance optimization with dynamic constraints."""
 
-import uuid
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import numpy as np
 import cvxpy as cp
@@ -16,6 +15,11 @@ from app.core.formulas import (
     transaction_cost,
 )
 from app.config import settings
+
+
+# Price on variance left above the volatility limit. Set far above the
+# intervention penalty so the limit is respected whenever it can be.
+VOL_BREACH_PENALTY = 50.0
 
 
 class OptimizerResult:
@@ -47,29 +51,58 @@ def optimize_portfolio(
     risk_aversion: float,
     constraints: dict,
     cost_rate: float | None = None,
+    intervention_penalty: float | None = None,
 ) -> OptimizerResult:
-    """Run CVXPY mean-variance optimization.
+    """Minimum-intervention portfolio optimisation.
 
-    maximize: wᵀμ - λ(wᵀΣw) - transaction_cost
+    maximize:  wᵀμ  −  λ(wᵀΣw)  −  (c + γ)·‖w − w₀‖₁
 
-    Subject to:
-    - sum(w) = 1
-    - w >= 0
-    - Dynamic per-asset and portfolio constraints from control engine
+    subject to:
+    - sum(w) = 1, w ≥ 0
+    - per-asset and portfolio limits from the control engine
+
+    Every term is expressed as a fraction of portfolio value so they are
+    commensurable. This matters: transaction cost used to be computed in
+    currency (turnover × value × rate ≈ 8,500) and subtracted from an
+    expected return expressed as a fraction (≈ 0.07), which made the cost
+    term about five orders of magnitude larger than everything else. The
+    solver was therefore blind to both expected return and `risk_aversion`.
+
+    γ (`intervention_penalty`) is the policy knob behind minimum necessary
+    intervention. Real transaction cost alone is roughly 0.1% of turnover,
+    far too small to discourage churn, so the preference for leaving the book
+    alone has to be stated explicitly rather than hoped for.
+
+    The volatility limit carries a penalised slack variable rather than being
+    a bare hard constraint. In a severe enough regime the limit can be
+    unreachable within the other bounds, and a plain constraint would make the
+    whole problem infeasible — the solver would return nothing and the caller
+    would silently fall back to the unchanged book, which is the one moment a
+    risk system must not go quiet. With slack the solver always returns the
+    best attainable allocation and reports how much risk it could not remove.
     """
     if cost_rate is None:
         cost_rate = settings.transaction_cost_rate
+    if intervention_penalty is None:
+        intervention_penalty = settings.intervention_penalty
 
     n = len(assets)
     w = cp.Variable(n)
 
-    # Objective: maximize return - risk_aversion * variance - txn cost
     ret = mean_returns @ w
-    risk = cp.quad_form(w, cov_matrix)
+    risk = cp.quad_form(w, cp.psd_wrap(cov_matrix))
     turnover = cp.norm1(w - current_weights)
-    txn = turnover * portfolio_value * cost_rate
 
-    objective = cp.Maximize(ret - risk_aversion * risk - txn)
+    # Both terms are fractions of portfolio value, like `ret` and `risk`.
+    trading_drag = (cost_rate + intervention_penalty) * turnover
+
+    # Residual variance above the limit, priced high enough that the solver
+    # only ever uses it when the limit is genuinely unreachable.
+    vol_slack = cp.Variable(nonneg=True)
+
+    objective = cp.Maximize(
+        ret - risk_aversion * risk - trading_drag - VOL_BREACH_PENALTY * vol_slack
+    )
 
     # Constraints
     cons = [
@@ -96,9 +129,10 @@ def optimize_portfolio(
         if asset.min_weight > 0.0:
             cons.append(w[i] >= asset.min_weight)
 
-    # Portfolio volatility constraint
+    # Portfolio volatility limit, softened by penalised slack so the problem
+    # is always feasible.
     max_vol = constraints.get("max_volatility", 0.15)
-    cons.append(cp.quad_form(w, cov_matrix) <= max_vol ** 2)
+    cons.append(cp.quad_form(w, cp.psd_wrap(cov_matrix)) <= max_vol ** 2 + vol_slack)
 
     # Solve
     problem = cp.Problem(objective, cons)
@@ -156,7 +190,7 @@ def save_optimization_run(
 ) -> OptimizationRun:
     """Persist optimisation run and allocations to PostgreSQL."""
     run = OptimizationRun(
-        id=uuid.uuid4(),
+        id=uuid4(),
         portfolio_id=portfolio_id,
         risk_level=risk_level,
         risk_aversion=risk_aversion,
@@ -171,7 +205,7 @@ def save_optimization_run(
 
     for i, asset in enumerate(assets):
         alloc = OptimizationAllocation(
-            id=uuid.uuid4(),
+            id=uuid4(),
             optimization_id=run.id,
             asset_id=asset.id,
             old_weight=float(old_weights[i]),

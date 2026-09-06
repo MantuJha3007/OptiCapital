@@ -8,6 +8,7 @@ from typing import Any
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
+from app.core.time import utcnow
 from app.models.rebalance import RebalanceAction
 from app.models.portfolio import Portfolio
 
@@ -64,7 +65,7 @@ def get_decision_outcomes(db: Session) -> list[dict[str, Any]]:
     if not outcomes:
         outcomes.append({
             "decision_id": "DEC-SYS-INIT",
-            "timestamp": (datetime.utcnow() - timedelta(days=2)).strftime("%Y-%m-%d %H:%M"),
+            "timestamp": (utcnow() - timedelta(days=2)).strftime("%Y-%m-%d %H:%M"),
             "action": "CRISIS_PROTECTION",
             "approved": True,
             "regime_at_decision": "CRISIS",

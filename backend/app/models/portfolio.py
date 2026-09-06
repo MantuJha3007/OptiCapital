@@ -4,6 +4,8 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
+from app.core.time import utcnow
+
 from sqlalchemy import String, Numeric, Float, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,10 +27,10 @@ class Portfolio(Base):
     risk_aversion: Mapped[float] = mapped_column(Float, default=1.0)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
+        DateTime, default=utcnow
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=utcnow, onupdate=utcnow
     )
 
     # Relationships

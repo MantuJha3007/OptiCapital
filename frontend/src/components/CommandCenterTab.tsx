@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react';
 import {
   TrendingUp,
   AlertTriangle,
@@ -11,6 +12,9 @@ import {
 } from 'lucide-react';
 import type { Portfolio, RiskMetrics } from '../types';
 import { RiskGauge } from './RiskGauge';
+import { EnvelopeBand } from './viz/EnvelopeBand';
+import { Attribution } from './viz/Attribution';
+import { buildExposure, type AssetClass } from '../lib/exposure';
 
 interface CommandCenterTabProps {
   portfolio: Portfolio | null;
@@ -56,6 +60,21 @@ export function CommandCenterTab({
 
   const currentStepIndex =
     level === 'CRISIS' ? 3 : level === 'STRESS' ? 2 : level === 'WARNING' ? 1 : 0;
+
+  const [hoveredSleeve, setHoveredSleeve] = useState<string | null>(null);
+
+  const exposure = useMemo(() => {
+    const classWeights: Partial<Record<AssetClass, number>> = {};
+    if (portfolio?.holdings) {
+      portfolio.holdings.forEach((h) => {
+        const sym = h.asset?.symbol as AssetClass | undefined;
+        if (sym) {
+          classWeights[sym] = Number(h.weight);
+        }
+      });
+    }
+    return buildExposure(classWeights, capital);
+  }, [portfolio, capital]);
 
   return (
     <div className="command-center-page">
@@ -140,6 +159,14 @@ export function CommandCenterTab({
                 {pct(riskMetrics?.liquidity_ratio ?? 0.9)}
               </span>
             </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-slate-700/60">
+            <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <span>Safe Operating Envelope & Headroom</span>
+              <span className="font-mono text-slate-400">Score: {score.toFixed(1)}</span>
+            </div>
+            <EnvelopeBand score={score} height={28} />
           </div>
         </div>
 
@@ -253,6 +280,31 @@ export function CommandCenterTab({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Institutional Exposure & Euler Risk Attribution Card */}
+      <div className="card p-5 mb-6 border border-slate-800 bg-slate-900/70 rounded-xl shadow-lg">
+        <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-3 flex-wrap gap-2">
+          <div>
+            <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wider flex items-center gap-2">
+              <Shield size={16} className="text-indigo-400" />
+              Capital vs. Risk Contribution Attribution (Euler Decomposition)
+            </h3>
+            <span className="text-xs text-slate-400">
+              Contrasts capital weight with Euler marginal risk contribution. Multiplier &gt; 1.0x indicates disproportionate danger.
+            </span>
+          </div>
+          <div className="text-right">
+            <span className="text-xs font-mono text-slate-400">Implied Annual Vol: </span>
+            <span className="text-xs font-mono font-bold text-slate-200">{(exposure.modelVol * 100).toFixed(1)}%</span>
+          </div>
+        </div>
+
+        <Attribution
+          sleeves={exposure.sleeves}
+          hovered={hoveredSleeve}
+          onHover={setHoveredSleeve}
+        />
       </div>
 
       {/* Control Actions & Execution Row */}

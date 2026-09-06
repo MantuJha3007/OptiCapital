@@ -101,9 +101,10 @@ def get_market_history(lookback_days: int = 60) -> dict[str, Any]:
 
     series = []
     for dt, row in prices_df.iterrows():
-        entry = {"date": str(dt)[:10]}
+        entry: dict[str, Any] = {"date": str(dt)[:10]}
         for col in prices_df.columns:
-            entry[col] = round(float(row[col]), 2)
+            val: Any = row[col]
+            entry[str(col)] = round(float(val), 2)
         series.append(entry)
 
     return {

@@ -6,9 +6,11 @@ import {
   Clock,
   FileText,
   RotateCcw,
+  Activity,
 } from 'lucide-react';
 import { api } from '../api';
 import type { RebalanceHistoryItem } from '../types';
+import { RiskTrajectory } from './viz/RiskTrajectory';
 
 interface DecisionHistoryTabProps {
   onRefresh?: () => void;
@@ -94,6 +96,27 @@ export function DecisionHistoryTab({ onRefresh }: DecisionHistoryTabProps) {
           </button>
         </div>
       </div>
+
+      {/* Risk Trajectory Chart across Decision History */}
+      {history.length >= 2 && (
+        <div className="card p-5 mb-6 border border-slate-800 bg-slate-900/60 rounded-xl shadow-lg">
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                <Activity size={16} className="text-cyan-400" />
+                Intervention Trajectory & Envelope De-escalation
+              </h3>
+              <p className="text-xs text-slate-400">
+                Audits risk score before (dashed) vs. after recommendation across historical rebalances plotted over regime bands.
+              </p>
+            </div>
+            <span className="text-xs font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+              {history.length} logged events
+            </span>
+          </div>
+          <RiskTrajectory history={history} />
+        </div>
+      )}
 
       {/* Audit Timeline */}
       <div className="timeline-container">

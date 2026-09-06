@@ -4,6 +4,7 @@ import io
 from typing import Any
 import numpy as np
 import pandas as pd
+from sqlalchemy.orm import Session
 
 from app.services.market_data.base import MarketDataProvider
 from app.core.constants import TRADING_DAYS_PER_YEAR
@@ -55,20 +56,25 @@ class CSVMarketDataProvider(MarketDataProvider):
         self.prices_df = cleaned_df
         self.symbols = list(self.prices_df.columns)
 
+        min_idx: Any = self.prices_df.index.min()
+        max_idx: Any = self.prices_df.index.max()
+        start_str = str(min_idx.date()) if hasattr(min_idx, "date") else str(min_idx)[:10]
+        end_str = str(max_idx.date()) if hasattr(max_idx, "date") else str(max_idx)[:10]
+
         return {
             "status": "LOADED",
             "filename": self.filename,
             "observations": len(self.prices_df),
             "symbols": self.symbols,
-            "date_range": [str(self.prices_df.index.min().date()), str(self.prices_df.index.max().date())],
+            "date_range": [start_str, end_str],
         }
 
     def get_prices(self, symbols: list[str] | None = None, lookback_days: int = 250) -> pd.DataFrame:
         df = self.prices_df.tail(lookback_days)
         if symbols:
             valid_cols = [s for s in symbols if s in df.columns]
-            return df[valid_cols] if valid_cols else df
-        return df
+            return pd.DataFrame(df[valid_cols]) if valid_cols else pd.DataFrame(df)
+        return pd.DataFrame(df)
 
     def get_returns(self, symbols: list[str] | None = None, lookback_days: int = 250) -> pd.DataFrame:
         prices = self.get_prices(symbols=symbols, lookback_days=lookback_days)
@@ -97,7 +103,7 @@ class CSVMarketDataProvider(MarketDataProvider):
             "offline_ready": True,
         }
 
-    def persist_to_database(self, db: "Session") -> dict[str, Any]:
+    def persist_to_database(self, db: Session) -> dict[str, Any]:
         """Write parsed CSV price data into the MarketPrice database table.
 
         Resolves CSV column names to asset IDs via the Asset table,
@@ -122,9 +128,10 @@ class CSVMarketDataProvider(MarketDataProvider):
                 skipped_symbols.append(col_name)
                 continue
 
-            for idx, row in self.prices_df[[col_name]].iterrows():
-                price_date = idx.date() if hasattr(idx, 'date') else idx
-                close_val = float(row[col_name])
+            sub_df: Any = self.prices_df[[col_name]]
+            for idx, row in sub_df.iterrows():
+                price_date = idx.date() if hasattr(idx, "date") else idx
+                close_val = float(row.iloc[0])
 
                 # Check if record exists
                 existing = (

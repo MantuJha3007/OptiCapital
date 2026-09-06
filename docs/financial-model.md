@@ -139,3 +139,51 @@ $$\alpha^* = \inf \left\{ \alpha \in [0, 0.50] \mid \text{RiskScore}(w(\alpha)) 
 
 - **Distance to Failure (DtF):** $\text{DtF} = \alpha^*$
 - **Resilience Score:** $\text{Resilience} = \min\left(\frac{\text{DtF}}{0.30}, 1.0\right) \times 100$
+
+---
+
+## 8. Stressed Covariance & Correlation Convergence
+
+A market crisis is an endogenous regime break where asset volatilities expand and diversification breaks down. To avoid the mathematical inversion bug (where falling equity prices make a portfolio appear *less risky* due to reduced naive equity weighting), AEGIS dynamically reprices covariance during scenario shocks:
+
+### 8.1 Scenario Severity
+$$\text{Severity} = \text{clamp}\left( 0.6 \cdot \frac{\text{WorstAssetShock}}{0.35} + 0.4 \cdot \frac{\text{PortfolioLoss}}{0.25}, 0.0, 1.0 \right)$$
+
+### 8.2 Stressed Volatility & Correlation Convergence
+1. **Volatility Expansion:**
+   $$\sigma'_i = \sigma_i \cdot (1 + 2.0 \cdot \text{Severity})$$
+2. **Correlation Convergence toward 1.0:**
+   $$\lambda_c = 0.80 \cdot \text{Severity}$$
+   $$C' = (1 - \lambda_c) C + \lambda_c J$$
+   where $J$ is the all-ones matrix ($J_{ij} = 1$). Because $C'$ is a convex combination of two positive semi-definite matrices, $C'$ remains positive semi-definite and guaranteed feasible for quadratic optimization.
+3. **Stressed Covariance Matrix:**
+   $$\Sigma'_{ij} = C'_{ij} \cdot \sigma'_i \cdot \sigma'_j$$
+
+### 8.3 Realized Drawdown Preservation
+$$\text{Drawdown}_{\text{effective}} = \max\left(\text{HistoricalMDD}, |\min(\text{PortfolioLoss}, 0.0)|\right)$$
+
+---
+
+## 9. Baseline Demo Portfolio Calibration
+
+| Asset | Category | Expected Return | Volatility | Liquidity | Calibrated Weight |
+|---|---|---|---|---|---|
+| **Equity (Nifty 50)** | EQUITY | 12.0% | 18.0% | 0.95 | **37%** |
+| **Gov Bonds (10Y G-Sec)** | FIXED_INCOME | 7.0% | 5.0% | 0.90 | **27%** |
+| **Corp Bonds (AAA Fund)** | FIXED_INCOME | 8.5% | 8.0% | 0.75 | **15%** |
+| **Gold (Gold ETF)** | COMMODITY | 9.0% | 15.0% | 0.85 | **10%** |
+| **Cash (Liquid / T-Bills)** | CASH | 4.0% | 1.0% | 1.00 | **11%** |
+
+- **Baseline HHI Concentration:** $0.254$ (comfortably below the $0.300$ ceiling)
+- **Baseline Cash Buffer:** $11.0\%$ (satisfies the $10.0\%$ SAFE cash floor)
+- **Resting Risk Score:** $\approx 22.8$ (**SAFE / GREEN** with $0$ breaches at rest)
+
+### Scenario Pipeline Benchmarks
+
+| Scenario | Equity Shock | Portfolio Loss | Post-Shock Risk | Regime | Action |
+|---|---|---|---|---|---|
+| **Normal Market** | +2.0% | +1.3% | 23.0 | SAFE | **HOLD (0.0% turnover)** |
+| **Inflation Shock** | -10.0% | -7.4% | 38.3 | WARNING | REBALANCE |
+| **Market Crash** | -38.0% | -16.2% | 62.3 | STRESS | REBALANCE |
+| **Systemic Crisis** | -50.0% | -24.0% | 67.3 | STRESS / CRISIS | REBALANCE |
+

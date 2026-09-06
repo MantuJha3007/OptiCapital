@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173"
     risk_aversion: float = 1.0
     transaction_cost_rate: float = 0.001
+    intervention_penalty: float = 0.15
 
     # Groq & AI Copilot
     groq_api_key: str = ""

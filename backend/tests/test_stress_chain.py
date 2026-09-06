@@ -47,7 +47,7 @@ def test_full_chain():
         print(f"   Stressed Envelope: {stressed['operating_envelope']}")
         print(f"   Intervention Required: {stressed['intervention_required']}")
         assert stressed["intervention_required"] is True
-        assert stressed["operating_envelope"] in ("RED", "YELLOW")
+        assert stressed["operating_envelope"] in ("RED", "ORANGE", "YELLOW")
 
         print(f"\n4. OPTIMIZER RECOMMENDATION:")
         print(f"   Action: {rec['action']}")

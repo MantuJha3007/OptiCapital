@@ -5,6 +5,8 @@ from uuid import UUID
 from decimal import Decimal
 from datetime import datetime
 
+from app.core.time import utcnow
+
 from sqlalchemy.orm import Session
 
 from app.models.rebalance import RebalanceAction
@@ -65,12 +67,15 @@ def save_rebalance_action(
 
 def approve_rebalance(
     db: Session,
-    optimization_id: UUID,
+    optimization_id: UUID | str,
 ) -> dict:
-    """Approve a rebalance: update simulated holdings in PostgreSQL.
+    """Approve a rebalance: update simulated holdings in PostgreSQL/SQLite.
 
     Returns summary of what was done.
     """
+    if isinstance(optimization_id, str):
+        optimization_id = UUID(optimization_id)
+
     # Find the optimization run
     opt_run = (
         db.query(OptimizationRun)
@@ -116,14 +121,14 @@ def approve_rebalance(
         if holding:
             holding.weight = alloc.new_weight
             holding.market_value = Decimal(str(round(alloc.new_weight * portfolio_value, 2)))
-            holding.updated_at = datetime.utcnow()
+            holding.updated_at = utcnow()
 
     # Mark rebalance as approved
     if ra:
         ra.approved = True
 
     # Update portfolio timestamp
-    portfolio.updated_at = datetime.utcnow()
+    portfolio.updated_at = utcnow()
 
     db.commit()
 
@@ -137,9 +142,12 @@ def approve_rebalance(
 
 def reject_rebalance(
     db: Session,
-    optimization_id: UUID,
+    optimization_id: UUID | str,
 ) -> dict:
     """Reject a rebalance recommendation."""
+    if isinstance(optimization_id, str):
+        optimization_id = UUID(optimization_id)
+
     ra = (
         db.query(RebalanceAction)
         .filter(RebalanceAction.optimization_id == optimization_id)

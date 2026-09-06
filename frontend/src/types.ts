@@ -98,6 +98,8 @@ export interface RebalanceHistoryItem {
   created_at: string;
 }
 
+export type RebalanceRecord = RebalanceHistoryItem;
+
 
 export interface ScenarioShock {
   asset_symbol: string;

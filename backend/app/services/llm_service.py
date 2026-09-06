@@ -94,7 +94,7 @@ def generate_llm_response(
                 f"User Question: {user_query}"
             )
 
-            messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+            messages: list[Any] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
             # Add bounded conversation history (last 6 turns)
             if conversation_history:

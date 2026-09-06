@@ -48,10 +48,10 @@ def compute_annualized_stats(
     daily = compute_daily_returns(prices)
 
     # Ensure column order matches asset_ids_ordered
-    daily = daily[asset_ids_ordered]
+    daily_df = pd.DataFrame(daily[asset_ids_ordered])
 
-    mean_daily = daily.mean().values
-    cov_daily = daily.cov().values
+    mean_daily = np.asarray(daily_df.mean().values, dtype=float)
+    cov_daily = np.asarray(daily_df.cov().values, dtype=float)
 
     return annualize_returns(mean_daily), annualize_covariance(cov_daily)
 

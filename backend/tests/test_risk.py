@@ -151,3 +151,15 @@ class TestWeightNormalization:
     def test_weights_sum_to_one(self):
         weights = np.array([0.45, 0.25, 0.15, 0.10, 0.05])
         assert abs(np.sum(weights) - 1.0) < 1e-10
+
+
+class TestRiskAttributionEndpoint:
+    def test_risk_attribution_endpoint(self, client):
+        resp = client.get("/api/risk/attribution")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "portfolio_volatility" in data
+        assert "risk_attributions" in data
+        assert "primary_driver" in data
+        assert len(data["risk_attributions"]) == 5
+

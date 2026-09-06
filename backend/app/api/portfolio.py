@@ -57,7 +57,7 @@ def set_custom_portfolio(data: CustomPortfolioInput, db: Session = Depends(get_d
         snapshot_id=snapshot.id,
     )
 
-    return CustomPortfolioResponse(portfolio=portfolio, risk=risk_response)
+    return CustomPortfolioResponse(portfolio=PortfolioOut.model_validate(portfolio), risk=risk_response)
 
 
 @router.post("/portfolio/reset")
@@ -69,11 +69,11 @@ def reset_portfolio(db: Session = Depends(get_db)):
 
     asset_map = {a.symbol: a for a in db.query(Asset).all()}
     defaults = {
-        "EQUITY": 0.45,
-        "GOV_BONDS": 0.25,
+        "EQUITY": 0.37,
+        "GOV_BONDS": 0.27,
         "CORP_BONDS": 0.15,
         "GOLD": 0.10,
-        "CASH": 0.05,
+        "CASH": 0.11,
     }
     capital = 10_000_000.0
     portfolio.total_capital = Decimal(str(capital))

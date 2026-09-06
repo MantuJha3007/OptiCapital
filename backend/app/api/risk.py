@@ -42,3 +42,14 @@ def get_risk(db: Session = Depends(get_db)):
         snapshot_id=snapshot.id,
     )
 
+
+@router.get("/risk/attribution")
+def get_risk_attribution(db: Session = Depends(get_db)):
+    """Get Euler risk attribution for the default portfolio."""
+    portfolio = get_default_portfolio(db)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="No portfolio found.")
+
+    from app.services.risk_attribution import compute_risk_attribution
+    return compute_risk_attribution(db, portfolio)
+

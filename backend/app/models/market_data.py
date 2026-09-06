@@ -3,7 +3,7 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import BigInteger, ForeignKey, Date, Float, UniqueConstraint
+from sqlalchemy import BigInteger, ForeignKey, Date, Float, Integer, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -12,8 +12,13 @@ from app.database import Base
 class MarketPrice(Base):
     __tablename__ = "market_prices"
 
+    # SQLite only auto-increments a column declared exactly INTEGER PRIMARY KEY,
+    # so BigInteger there yields a NULL id on insert. The variant keeps BIGINT
+    # on PostgreSQL while letting the same schema run on SQLite unchanged.
     id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True, autoincrement=True
+        BigInteger().with_variant(Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
     )
 
     asset_id: Mapped[uuid.UUID] = mapped_column(

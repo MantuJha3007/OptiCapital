@@ -150,6 +150,8 @@ def update_custom_portfolio(db: Session, data: CustomPortfolioInput):
         .filter(Portfolio.id == portfolio.id)
         .first()
     )
+    if portfolio is None:
+        raise ValueError("Portfolio not found after update.")
 
     # Re-calculate risk snapshot on the new portfolio
     risk_result = calculate_risk(db, portfolio)
