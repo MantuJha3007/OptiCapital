@@ -32,11 +32,9 @@ export function DecisionHistoryTab({ onRefresh }: DecisionHistoryTabProps) {
     try {
       const data = await api.getRebalanceHistory();
       setHistory(data);
-      onRefresh?.();
     } catch (err) {
       console.error('Failed to load rebalance history:', err);
     } finally {
-
       setLoading(false);
     }
   };
@@ -90,7 +88,14 @@ export function DecisionHistoryTab({ onRefresh }: DecisionHistoryTabProps) {
             </button>
           </div>
 
-          <button className="btn btn-secondary btn-sm" onClick={fetchHistory} disabled={loading}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => {
+              fetchHistory();
+              onRefresh?.();
+            }}
+            disabled={loading}
+          >
             <RotateCcw size={14} />
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>

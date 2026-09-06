@@ -8,6 +8,7 @@ import {
   RefreshCw,
   Building2,
   Database,
+  Home,
 } from 'lucide-react';
 
 import { api } from './api';
@@ -22,7 +23,11 @@ import { ContagionNetwork } from './components/ContagionNetwork';
 import { StressTestingLabTab } from './components/StressTestingLabTab';
 import { DecisionHistoryTab } from './components/DecisionHistoryTab';
 
-export default function Dashboard() {
+interface DashboardProps {
+  onReturnToLanding?: () => void;
+}
+
+export default function Dashboard({ onReturnToLanding }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<DashboardTab>('command-center');
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [risk, setRisk] = useState<RiskResponse | null>(null);
@@ -36,8 +41,8 @@ export default function Dashboard() {
   const [isOptimizing, setIsOptimizing] = useState<boolean>(false);
 
   // Load initial backend data
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const [p, r, s, ms] = await Promise.all([
@@ -51,9 +56,9 @@ export default function Dashboard() {
       setScenarios(s);
       if (ms) setMasterState(ms);
     } catch (err: any) {
-      setError(err.message || 'Failed to connect to Aegis API backend.');
+      if (!silent) setError(err.message || 'Failed to connect to Aegis API backend.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -126,7 +131,7 @@ export default function Dashboard() {
         <p style={{ color: 'var(--text-secondary)', maxWidth: 460, textAlign: 'center' }}>
           {error}
         </p>
-        <button className="btn btn-primary" onClick={loadData}>
+        <button className="btn btn-primary" onClick={() => loadData()}>
           <RefreshCw size={16} /> Retry Connection
         </button>
       </div>
@@ -140,7 +145,12 @@ export default function Dashboard() {
       {/* ─── Top Global Navigation Bar ─── */}
       <header className="navbar">
         <div className="nav-container">
-          <div className="nav-brand">
+          <div
+            className="nav-brand"
+            onClick={onReturnToLanding}
+            style={{ cursor: onReturnToLanding ? 'pointer' : 'default' }}
+            title={onReturnToLanding ? 'Return to System Overview' : undefined}
+          >
             <div className="logo-box">
               <Shield size={22} color="#ffffff" />
             </div>
@@ -153,6 +163,18 @@ export default function Dashboard() {
           </div>
 
           <div className="nav-actions">
+            {/* Overview / What We Do Link */}
+            {onReturnToLanding && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={onReturnToLanding}
+                title="Return to System Overview & Architecture"
+              >
+                <Home size={14} />
+                Overview
+              </button>
+            )}
+
             {/* Real-time system pulse */}
             <div className="system-status-indicator">
               <span className="pulse-dot"></span>
@@ -245,7 +267,7 @@ export default function Dashboard() {
 
         {/* Tab 5: Decision History & Governance */}
         {activeTab === 'decision-history' && (
-          <DecisionHistoryTab onRefresh={loadData} />
+          <DecisionHistoryTab onRefresh={() => loadData(true)} />
         )}
       </main>
 
